@@ -123,15 +123,13 @@ static void call_class_loads(void){
 `(*load_method)(cls, SEL_load);` 执行load方式是直接找到方法地址直接执行，没有使用消息转发机制<br/>
 从代码实现中看到：先调用主类的+load，在调用分类的+load，分类没有覆盖主类的方法，并且都执行了，这点不同于其他分类覆盖<br/>
 
-
-
 ## +initialize方法
 
-## +initialize的执行时机
+### +initialize的执行时机
 当第一次给当前类发送消息是会触发+initialize方法。+load方法的执行是直接取函数地址执行，没有通过消息转发机制，所以+initialize方法不会在+load方法之前执行。<br/>
-initialize方法有可能永远不会执行到<br/>
+initialize方法有可能永远不会执行到
 
-## +initialize的代码实现
+### +initialize的代码实现
 在+initialize方法处打断点看到，通过`_class_initialize`调用了initialize方法
 ```objectivec
 void _class_initialize (Class cls) {
