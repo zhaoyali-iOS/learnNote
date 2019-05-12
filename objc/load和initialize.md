@@ -204,7 +204,7 @@ static void _finishInitializing (Class cls, Class supercls) {
 
 ## +load和+initialize方法比较
 项目|+load|+initialize
----|:--:|---:
+---|---|---
 调用时机|被加载到runtime系统中|第一次收到消息
 调用顺序|先父类后子类最后分类|先父类后子类
 调用次数|一次|多次
