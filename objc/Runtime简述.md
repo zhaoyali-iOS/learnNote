@@ -97,7 +97,7 @@ struct bucket_t {
      1.实例方法调用时，通过对象的isa在类中查找方法
      2.类方法调用时，通过类的isa在元类中查找方法
 <br/>
-![instance-calss-meta](objc/image/instance-class-metaClass.png)
+![instance-calss-meta](./image/instance-class-metaClass.png)
 
 ### 遗留问题
 ```objectivec
