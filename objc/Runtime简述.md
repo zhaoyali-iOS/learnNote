@@ -86,8 +86,29 @@ struct bucket_t {
     MethodCacheIMP _imp;//方法的实现地址IMP
      ....
 };
+
+bucket_t * cache_t::find(cache_key_t k, id receiver)
+{
+    assert(k != 0);
+
+    bucket_t *b = buckets();//获取散列表
+    mask_t m = mask();
+    mask_t begin = cache_hash(k, m);//根据key和已占用数量，通过hash算法找到目标值的下标
+    mask_t i = begin;
+    do {
+        if (b[i].key() == 0  ||  b[i].key() == k) {
+            return &b[i];
+        }
+    } while ((i = cache_next(i, m)) != begin);
+
+    // hack
+    Class cls = (Class)((uintptr_t)this - offsetof(objc_class, cache));
+    cache_t::bad_cache(receiver, (SEL)k, cls);//打印错误信息
+}
+
 ```
-`cache_t` 缓存的是方法名和IMP，实现是一个hash表，通过f(key)获取对应的IMP<br/>
+通过`cache_getImp`获取缓存方法，这个方法会调用到 cache_t的`find`方法<br/>
+`cache_t` 缓存的是方法名和IMP，实现是一个hash表，通过f(key)获取对应的IMP
 
 ### isa的理解
 * OC中所有的实例对象、类在Runtime中都理解成是一个结构体对象
