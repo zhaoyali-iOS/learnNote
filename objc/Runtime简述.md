@@ -44,7 +44,8 @@ struct objc_class ：objc_object {
 }
 ```
 可以看出OC的类也是一个结构体对象<br/>
-`objc_class`继承自`objc_object`,自然也有isa成员变量
+`objc_class`继承自`objc_object`,自然也有isa成员变量<br/>
+`cache` 缓存当前类已经加载过的方法，是一个bucket_t元素的散列表<br/>
 `class_data_bits_t`存储类的实例方法、属性、协议，是`class_rw_t` 加上flags
 
 ```objectivec
@@ -67,6 +68,7 @@ struct method_t {
     ...
 };
 ```
+`flags` 是一个32字节的数值，用于各种标记位，如是否是meta、是否是root类、是否已经loaded、是否正在initializing，是否已经initialized等<br/>
 `class_ro_t`存储编译时期确定的方法、属性、协议<br/>
 `method_array_t` 存储运行时加载的所有方法，主类和分类都有，分类方法在前，消息传递中在这个数组中找到相同方法名就结束，不会继续往后找，所以分类会覆盖主类的方法<br/>
 
@@ -79,22 +81,13 @@ struct cache_t {
 };
 
 struct bucket_t {
-private:
-    // IMP-first is better for arm64e ptrauth and no worse for arm64.
-    // SEL-first is better for armv7* and i386 and x86_64.
-#if __arm64__
-    MethodCacheIMP _imp;
-    cache_key_t _key;
-#else
+     ....
     cache_key_t _key;//方法名@selector
     MethodCacheIMP _imp;//方法的实现地址IMP
-#endif
      ....
 };
 ```
 `cache_t` 缓存的是方法名和IMP，实现是一个hash表，通过f(key)获取对应的IMP<br/>
-
-
 
 ### isa的理解
 * OC中所有的实例对象、类在Runtime中都理解成是一个结构体对象
@@ -104,3 +97,24 @@ private:
      1.实例方法调用时，通过对象的isa在类中查找方法
      2.类方法调用时，通过类的isa在元类中查找方法
 图片
+
+### 遗留问题
+```objectivec
+struct bucket_t {
+private:
+    // IMP-first is better for arm64e ptrauth and no worse for arm64.
+    // SEL-first is better for armv7* and i386 and x86_64.
+#if __arm64__
+    MethodCacheIMP _imp;
+    cache_key_t _key;
+#else
+    cache_key_t _key;
+    MethodCacheIMP _imp;
+#endif
+    ...
+};
+```
+这里的注释说明，不同架构下结构体成员变量的先后顺序会影响性能，这个的依据是什么？
+
+
+
