@@ -34,7 +34,7 @@ union isa_t {
 `isa_t` 是一个[union联合体](https://blog.csdn.net/engerled/article/details/6205584)，也就是说isa_t、cls、bits公用同一块地址空间,不同时间存储不同的变量
 
 #### objc_class
-```objectc
+```objectivec
 typedef struct objc_class *Class;
 struct objc_class ：objc_object {
      Class superclass;
@@ -68,7 +68,33 @@ struct method_t {
 };
 ```
 `class_ro_t`存储编译时期确定的方法、属性、协议<br/>
-`method_array_t` 存储运行时加载的所有方法，主类和分类都有，分类方法在前，消息传递中在这个数组中找到相同方法名就结束，不会继续往后找，所以分类会覆盖主类的方法<br/>《》
+`method_array_t` 存储运行时加载的所有方法，主类和分类都有，分类方法在前，消息传递中在这个数组中找到相同方法名就结束，不会继续往后找，所以分类会覆盖主类的方法<br/>
+
+```objectivec
+struct cache_t {
+    struct bucket_t *_buckets;//散列表,元素是bucket_t
+    mask_t _mask;//散列表总容量
+    mask_t _occupied;//散列表已使用容量
+    ...
+};
+
+struct bucket_t {
+private:
+    // IMP-first is better for arm64e ptrauth and no worse for arm64.
+    // SEL-first is better for armv7* and i386 and x86_64.
+#if __arm64__
+    MethodCacheIMP _imp;
+    cache_key_t _key;
+#else
+    cache_key_t _key;//方法名@selector
+    MethodCacheIMP _imp;//方法的实现地址IMP
+#endif
+     ....
+};
+```
+`cache_t` 缓存的是方法名和IMP，实现是一个hash表，通过f(key)获取对应的IMP<br/>
+
+
 
 ### isa的理解
 * OC中所有的实例对象、类在Runtime中都理解成是一个结构体对象
