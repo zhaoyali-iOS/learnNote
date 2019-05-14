@@ -31,7 +31,8 @@ union isa_t {
      ...
 }
 ```
-`isa_t` 是一个[union联合体](https://blog.csdn.net/engerled/article/details/6205584)，也就是说isa_t、cls、bits公用同一块地址空间,不同时间存储不同的变量
+`isa_t` 是一个[union联合体](https://blog.csdn.net/engerled/article/details/6205584)，也就是说isa_t、cls、bits公用同一块地址空间,不同时间存储不同的变量<br/>
+KVO通过修改isa指针实现的，所以我们在判断实例类型是最好使用`-calss`方法，而不通过isa。
 
 #### objc_class
 ```objectivec
