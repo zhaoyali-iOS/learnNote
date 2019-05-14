@@ -120,6 +120,18 @@ typedef struct objc_selector *SEL;
 * 不同类相同方法名，相同方法名不同参数类型，这些都具有相同的SEL
 * 内存中有一个很长很长的表，用于存储所有的选择子，包括.h和.m文件的方法名，@selector所产生的选择子
 
+#### super
+super的数据结构是这样的：
+```objectivec
+struct objc_super {
+    /// 消息的接受者，主要用于发生错误是的信息打印
+    __unsafe_unretained _Nonnull id receiver;
+    /// 查找方法的起始类
+    __unsafe_unretained _Nonnull Class super_class;
+};
+```
+runtime的消息机制`lookupIMPorFoward`只是找到方法实现后返回IMP，`objc_msgSend`中执行IMP时会多传递参数self和_cmd,self就是消息的接受者。所以当子类去执行继承自父类的方法时，传入的self指针仍然指向的是子类
+
 ### isa的理解
 * OC中所有的实例对象、类在Runtime中都理解成是一个结构体对象
 * 从objc_object和objc_class结构体可以看出，对象和类都有一个isa_t结构体
