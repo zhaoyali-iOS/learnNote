@@ -129,9 +129,12 @@ struct objc_super {
     /// 查找方法的起始类
     __unsafe_unretained _Nonnull Class super_class;
 };
+
+objc_msgSendSuper(void /* struct objc_super *super, SEL op, ... */ )
+
 ```
-当OC中编译到super关键字时会自动创建objc_super结构体对象<br/>
-runtime的消息机制`lookupIMPorFoward`只是找到方法实现后返回IMP，函数IMP的执行是在`objc_msgSend`中；<br/>
+当OC执行到super关键字时会自动创建objc_super结构体对象，然后调用objc_msgSendSuper，传入这个super结构体对象和方法选择子，以及方法参数<br/>
+方法真正执行会多传入两个参数self和_com,self就是消息的接受者，即super结构体中的reciver,_cmd就是选择子
 ```objective
     //根据resolveInstanceMethod方法的声明，修改方法执行时参数和返回值
     //BOOL是方法声明是返回的类型，Class消息接收者的类型，SEL就是_cmd,后面的SEL是方法声明时的参数
@@ -140,7 +143,7 @@ runtime的消息机制`lookupIMPorFoward`只是找到方法实现后返回IMP，
     bool resolved = msg(cls, SEL_resolveInstanceMethod, sel);
 ```
 这块代码是截取的`_class_resolveInstanceMethod`中执行resolveInstanceMethod方法的代码片段<br/>
-从这个片段中窥看到：通过强制转换类型，实现多传入参数self和_cmd,self就是消息的接受者。所以当子类去执行继承自父类的方法时，传入的self指针仍然指向的是子类
+从这个片段中窥看到：通过强制转换类型，实现多传入参数self和_cmd,self就是消息的接受者。所以当子类去执行继承自父类的方法时，传入的self指针仍然指向子类
 
 ### isa的理解
 * OC中所有的实例对象、类在Runtime中都理解成是一个结构体对象
