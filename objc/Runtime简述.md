@@ -110,6 +110,15 @@ bucket_t * cache_t::find(cache_key_t k, id receiver)
 通过`cache_getImp`获取缓存方法，这个方法会调用到 cache_t的`find`方法<br/>
 `cache_t` 缓存的是方法名和IMP，实现是一个hash表，通过f(key)获取对应的IMP
 
+#### SEL选择子
+数据结构是这样的：
+```objectivec
+typedef struct objc_selector *SEL;
+```
+* 其实就是方法的名字
+* 不同类相同方法名，相同方法名不同参数类型，这些都具有相同的SEL
+* 内存中有一个很长很长的表，用于存储所有的选择子，包括.h和.m文件的方法名，@selector所产生的选择子
+
 ### isa的理解
 * OC中所有的实例对象、类在Runtime中都理解成是一个结构体对象
 * 从objc_object和objc_class结构体可以看出，对象和类都有一个isa_t结构体
