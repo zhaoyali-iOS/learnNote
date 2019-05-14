@@ -209,3 +209,5 @@ static void _finishInitializing (Class cls, Class supercls) {
 显示调用父类|否|否
 沿用父类实现|否|是
 分类实现|不覆盖，主类和分类都执行|分类会覆盖主类
+
+这里说的调用次数是，runtime系统调用的次数，但是程序员仍然可以显示的调用这两个方法，所以为了安全我们一般在实现时也会使用dispatch_once。
