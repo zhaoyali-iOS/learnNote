@@ -187,8 +187,9 @@ Child类实现了c_test方法{log(ChildTest); call:c_test}<br/>
 
 ### 最佳实践，只在当前类中交换，不破破坏方法的继承调用顺序
 * 先add，再根据情况repalce或exchange
-* swizzing的两个方法都要在当前类中实现
-
+* swizzing的两个方法都要在当前类中实现<br/>
+交换后如图所示
+![swizzing_better](image/swizzing_better.jpeg)
 
 ## 总结
 swizzing是把双刃剑，给我们带来便利的同时也极容易出错，因此在使用是要注意细节
