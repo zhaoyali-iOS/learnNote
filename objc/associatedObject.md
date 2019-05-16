@@ -34,7 +34,7 @@ SEL|SEL sel = @selector(xxx)|sel
 
 
 ## 数据结构图
-![associationO-object](image/)
+![associationO-object](image/associated_object.jpeg)
 
 ```objectivec
 class AssociationsManager {
