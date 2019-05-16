@@ -169,6 +169,18 @@ void method_exchangeImplementations(Method m1, Method m2)
 * 注意操作的是类方法还是实例方法，类方法要在metaClass中找IMP(objc_getClass([self class]) )，实例方法在Class中找IMP([self class])
 * `class_getInstanceMethod`方法的特点要注意，会在父类中查找，为了避免错误，最好保证两个方法在当前类中都已经实现了
 
+## 错误使用
+现有Base类并实现了test方法，test中就是打印‘BaseTest’
+Super类继承自Base类，Child类继承自Super类
+### 只实现swizzing方法，原有方法不实现，但父类实现了
+Super类实现了s_test方法{log(SuperTest); call:s_test}
+Child类实现了c_test方法{log(ChildTest); call:c_test}
+使用上面的方式分别在super和child的中实现swizzing，控制顺序先调用Child的swizzing后Super
+交换后如图所示
+![child first](image/swizzing_currentclass_not_implement.jpg)
+这个时候调用Child的实例的test方法，打印是：ChildTest、BaseTest；直接越过了super的test方法，所以我们要保证swizzing的原有方法在当前类中实现
+
+
 ## 总结
 swizzing是把双刃剑，给我们带来便利的同时也极容易出错，因此在使用是要注意细节
 * swizzing的实现时机是load而不是initialize，因为initialize会执行多次且分类会覆盖主类和其他分类的实现
