@@ -170,15 +170,24 @@ void method_exchangeImplementations(Method m1, Method m2)
 * `class_getInstanceMethod`方法的特点要注意，会在父类中查找，为了避免错误，最好保证两个方法在当前类中都已经实现了
 
 ## 错误使用
-现有Base类并实现了test方法，test中就是打印‘BaseTest’
-Super类继承自Base类，Child类继承自Super类
+已有Base类并实现了test方法{ log(BaseTest) };<br/>
+Super类继承自Base类，Child类继承自Super类<br/>
+Super类实现了s_test方法{log(SuperTest); call:s_test}<br/>
+Child类实现了c_test方法{log(ChildTest); call:c_test}<br/>
+
 ### 只实现swizzing方法，原有方法不实现，但父类实现了
-Super类实现了s_test方法{log(SuperTest); call:s_test}
-Child类实现了c_test方法{log(ChildTest); call:c_test}
-使用上面的方式分别在super和child的中实现swizzing，控制顺序先调用Child的swizzing后Super
-交换后如图所示
+使用上面的方式分别在super和child的中实现swizzing，控制顺序先调用Child的swizzing后Super，交换后如图所示
 ![child first](image/swizzing_currentclass_not_implement.jpg)
 这个时候调用Child的实例的test方法，打印是：ChildTest、BaseTest；直接越过了super的test方法，所以我们要保证swizzing的原有方法在当前类中实现
+
+### swizzing时不add直接replace，当前类没有实现原有方法，但父类实现了
+在swizzing的实现中不使用`class_addMethod`,而是直接`method_exchangeImplementations`,先调用super的swizzing再Child的，交换后如图所示
+![no_add](image/swizzing_replace_directly.jpg)
+这个时候调用Base实例的test方法会直接crash
+
+### 最佳实践，只在当前类中交换，不破破坏方法的继承调用顺序
+* 先add，再根据情况repalce或exchange
+* swizzing的两个方法都要在当前类中实现
 
 
 ## 总结
