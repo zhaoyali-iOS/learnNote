@@ -126,8 +126,10 @@ static void call_class_loads(void){
 ## +initialize方法
 
 ### +initialize的执行时机
-当第一次给当前类发送消息是会触发+initialize方法。+load方法的执行是直接取函数地址执行，没有通过消息转发机制，所以+initialize方法不会在+load方法之前执行。<br/>
-initialize方法有可能永远不会执行到
+* 简单来说就是当第一次给类发送消息时会触发+initialize方法。
+* 详细说来，当libobjc等动态库加载后，runtime初始化(`_objc_init`调用)完成，`map_images`和`load_images`方法执行之后,第一次向类发送消息时执行。+load方法的执行是直接取函数地址执行，没有通过消息转发机制，所以+load方法不会触发+initialize方法，load要先与initialize执行。
+* 在main函数之前会有其他的类已经初始化了，所以initialize方法在main函数前和后都会执行，一般我们自己定义类的initialize方法是在main函数之后执行。
+* initialize方法有可能永远不会执行到。
 
 ### +initialize的代码实现
 在+initialize方法处打断点看到，通过`_class_initialize`调用了initialize方法
