@@ -37,10 +37,24 @@ SEL|SEL sel = @selector(xxx)|sel
 ![associationO-object](image/associated_object.jpeg)
 
 ```objectivec
+// class AssociationsManager manages a lock / hash table singleton pair.
+// Allocating an instance acquires the lock, and calling its assocations()
+// method lazily allocates the hash table.
+
+spinlock_t AssociationsManagerLock;
+
 class AssociationsManager {
     // associative references: object pointer -> PtrPtrHashMap.
     static AssociationsHashMap *_map;
-    ...
+public:
+    AssociationsManager()   { AssociationsManagerLock.lock(); }
+    ~AssociationsManager()  { AssociationsManagerLock.unlock(); }
+    
+    AssociationsHashMap &associations() {
+        if (_map == NULL)
+            _map = new AssociationsHashMap();
+        return *_map;
+    }
 };
 
 class AssociationsHashMap : public unordered_map<disguised_ptr_t, ObjectAssociationMap *, DisguisedPointerHash, DisguisedPointerEqual, AssociationsHashMapAllocator> {
@@ -49,8 +63,10 @@ class AssociationsHashMap : public unordered_map<disguised_ptr_t, ObjectAssociat
         void operator delete(void *ptr) { ::free(ptr); }
     };
 ```
-`AssociationsManager`是一个全局的manager，用于管理程序中所有关联对象的HashMap<br/>
-`AssociationsHashMap`是一个无序的集合，以`disguised_ptr_t`为key，以`ObjectAssociationMap`为value
+* `AssociationsManager`是一个全局的manager，用于管理程序中所有关联对象的HashMap<br/>
+* `AssociationsHashMap`是一个无序的集合，以`disguised_ptr_t`(实例地址算出的唯一字符串)为key，以`ObjectAssociationMap`为value<br/>
+* `AssociationsManager`通过懒加载的方式创建`AssociationsHashMap`；<br/>
+* 在声明`AssociationsManager`时加锁，在释放`AssociationsManager`时开锁，也是线程安全的。
 <br/>
 <br/>
 
