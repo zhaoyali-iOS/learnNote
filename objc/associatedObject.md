@@ -132,29 +132,50 @@ typedef OBJC_ENUM(uintptr_t, objc_AssociationPolicy) {
     OBJC_ASSOCIATION_COPY = 01403          /**< Specifies that the associated object is copied.
                                             *   The association is made atomically. */
 };
+
+enum { 
+    OBJC_ASSOCIATION_SETTER_ASSIGN      = 0,
+    OBJC_ASSOCIATION_SETTER_RETAIN      = 1,
+    OBJC_ASSOCIATION_SETTER_COPY        = 3,            // NOTE:  both bits are set, so we can simply test 1 bit in releaseValue below.
+    OBJC_ASSOCIATION_GETTER_READ        = (0 << 8), 
+    OBJC_ASSOCIATION_GETTER_RETAIN      = (1 << 8), 
+    OBJC_ASSOCIATION_GETTER_AUTORELEASE = (2 << 8)
+};
 ```
-引用关系中值得说明的是`OBJC_ASSOCIATION_ASSIGN`，相当于时assign，不同于weak<br/>
-在dealloc中不需要显性的移除关联对象，因为runtime已经帮我们实现了这个功能<br/>
-NSObject中的dealloc方法的调用关系：dealloc->_objc_rootDealloc->objc_object::rootDealloc->object_dispose->objc_destructInstance
+`objc_AssociationPolicy`是公开的枚举类型，`OBJC_ASSOCIATION_XXX`是内部实现用到的枚举，二者一一对应是等价的<br/>
+引用关系中值得说明的是`OBJC_ASSOCIATION_ASSIGN`，相当于时assign，没有weak,关联的目的对象释放时不会自动置nil<br/>
+
 ```objectivec
-void *objc_destructInstance(id obj) 
-{
-    if (obj) {
-        // Read all of the flags at once for performance.
-        bool cxx = obj->hasCxxDtor();
-        bool assoc = obj->hasAssociatedObjects();
-
-        // This order is important.
-        if (cxx) object_cxxDestruct(obj);
-        if (assoc) _object_remove_assocations(obj);
-        obj->clearDeallocating();
+static id acquireValue(id value, uintptr_t policy) {
+    switch (policy & 0xFF) {
+    case OBJC_ASSOCIATION_SETTER_RETAIN://OBJC_ASSOCIATION_RETAIN_NONATOMIC是执行
+        return objc_retain(value);
+    case OBJC_ASSOCIATION_SETTER_COPY://OBJC_ASSOCIATION_COPY_NONATOMIC
+        return ((id(*)(id, SEL))objc_msgSend)(value, SEL_copy);
     }
+    return value;
+}
 
-    return obj;
+```
+在添加关联对象时会用到`acquireValue`,可以看到对retain和copy做了相应的内存管理
+```objectivec
+id _object_get_associative_reference(id object, void *key) {
+    ...
+    if (policy & OBJC_ASSOCIATION_GETTER_RETAIN) {
+        objc_retain(value);
+    } 
+    if (value && (policy & OBJC_ASSOCIATION_GETTER_AUTORELEASE)) {
+        objc_autorelease(value);
+    }
+    ....
+    return value;
 }
 ```
-`objc_destructInstance`中我们看到会调用`_object_remove_assocations`来移除关联对象的引用关系
+在获取关联对象时会调用到`_object_get_associative_reference`,这里也会做相应的retian或release操作<br/><br/>
 
+
+在dealloc中不需要显性的移除关联对象，因为runtime已经帮我们实现了这个功能<br/>
+NSObject中的dealloc方法的调用关系：dealloc->_objc_rootDealloc->objc_object::rootDealloc->object_dispose->objc_destructInstance->_object_remove_assocations
 ```objectivec
 void _object_remove_assocations(id object) {
     vector< ObjcAssociation,ObjcAllocator<ObjcAssociation> > elements;
@@ -181,7 +202,6 @@ void _object_remove_assocations(id object) {
 ```
 `_object_remove_assocations`实现思路：通过manager取得全局的`AssociationsHashMap`,在map中通过object的`DISGUISE`key取得实例对象对应的`ObjectAssociationMap`。
 上面我们已经说过`ObjectAssociationMap`就是存储某个实例对象的关联对象集合，在这里会遍历ObjectAssociationMap的每一个元素，执行`ReleaseValue`并从集合中移除
-
 ```objectivec
 static void releaseValue(id value, uintptr_t policy) {
     if (policy & OBJC_ASSOCIATION_SETTER_RETAIN) {
