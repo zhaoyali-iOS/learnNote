@@ -225,3 +225,10 @@ objc_object::release()
 `ReleaseValue`最终会根据关联对象的policy执行相应的release方法
 
                                      
+## 总结
+* 所有的关联关系都集中交由全局的`AssociationsManager`管理，都集中存储在`AssociationsHashMap`的hashMap中
+* 这个`AssociationsHashMap`以懒加载的方式创建，通过锁实现线程安全
+* 关联对象的内存管理方式中有retain，copy和assign，没有weak
+* 在关联对象销毁时自动释放关联对象，assign的不会置为nil
+
+
