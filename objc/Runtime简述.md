@@ -28,10 +28,26 @@ union isa_t {
      ...
      Class cls;
      uintptr_t bits;
-     ...
+#if defined(ISA_BITFIELD)
+    struct {
+        ISA_BITFIELD;  // defined in isa.h
+    };
+#endif 
 }
+
+#   define ISA_BITFIELD                                                      \
+      uintptr_t nonpointer        : 1;                                       \
+      uintptr_t has_assoc         : 1;                                       \
+      uintptr_t has_cxx_dtor      : 1;                                       \
+      uintptr_t shiftcls          : 33; /*MACH_VM_MAX_ADDRESS 0x1000000000*/ \
+      uintptr_t magic             : 6;                                       \
+      uintptr_t weakly_referenced : 1;                                       \
+      uintptr_t deallocating      : 1;                                       \
+      uintptr_t has_sidetable_rc  : 1;                                       \
+      uintptr_t extra_rc          : 19
 ```
-`isa_t` 是一个[union联合体](https://blog.csdn.net/engerled/article/details/6205584)，也就是说isa_t、cls、bits公用同一块地址空间,不同时间存储不同的变量<br/>
+`isa_t` 是一个[union联合体](https://blog.csdn.net/engerled/article/details/6205584)，也就是说cls、bits、ISA_BITFIELD结构体共用同一块地址空间,不同时间存储不同的变量<br/>
+这里我只贴了在手机64位系统下ISA_BITFIELD结构体的定义。存储许多标记位，对象是否有关联对象、弱引用、正在销毁、sideTable引用计数，对象地址等内容。
 KVO通过修改isa指针实现的，所以我们在判断实例类型是最好使用`-calss`方法，而不通过isa。
 
 #### objc_class
