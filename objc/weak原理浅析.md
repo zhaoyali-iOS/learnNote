@@ -36,9 +36,9 @@ class StripedMap {
     }
 };
 ```
-`StripedMap`实际是一个长度对齐且固定的散列数组，长度是`StripeCount`，每个元素的大小是`StripeCount`。<br/>
+`StripedMap`实际是一个长度对齐且固定的散列数组，长度是`StripeCount`，每个元素的大小是`CacheLineSize`。<br/>
 重载了`[]`运算符方便元素的存取。<br/>
-通过实例对象的地址和`indexForPointer`计算下标，进而取得对应的`SideTable`。hash算法是：实例地址分别`右移`4位和9位得到的两个结果做`异或`运算，得到的新数与StripeCount做`取余`运算,最终得到hash值。<br/>
+通过实例对象的地址和`indexForPointer`计算下标，进而取得对应的`SideTable`。hash算法是：实例地址分别`右移`4位和9位得到的两个结果做`异或`运算，得到的新数与StripeCount做`取余`运算,最终得到hash值。最后的取余操作保证了hash值的均匀分布<br/>
 一般情况是对整个散列表加锁，但程序运行时实例对象的数量非常大，对`StripedMap`的访问会非常频繁，如果每访问一次就对map加锁，会导致程序卡顿，所以为了降低锁的竞争，减少锁的粒度，使用`分离锁`技术---给每个元素加锁而不是整个hash表加锁，同时也增加锁的伸缩性。<br/>
 程序运行时会创建成百上千个对象，而stripedMap的长度只有64，所以hash冲突的概率会非常大，所以这样一个SideTable中存储多个实例对象的引用关系和状态值。下面就进一步看看`SideTable`的结构：
 ```objectivec
