@@ -36,11 +36,11 @@ class StripedMap {
     }
 };
 ```
-`StripedMap`实际是一个长度对齐且固定的散裂数组，长度是`StripeCount`，每个元素的大小是`StripeCount`。<br/>
+`StripedMap`实际是一个长度对齐且固定的散列数组，长度是`StripeCount`，每个元素的大小是`StripeCount`。<br/>
 重载了`[]`运算符方便元素的存取。<br/>
 通过实例对象的地址和`indexForPointer`计算下标，进而取得对应的`SideTable`。hash算法是：实例地址分别`右移`4位和9位得到的两个结果做`异或`运算，得到的新数与StripeCount做`取余`运算,最终得到hash值。<br/>
-一般情况是对整个散列表加锁，但这里对每个元素sidetable加锁。由于程序运行时实例对象的数量非常大，所以为了降低锁的竞争，减少锁的粒度，使用`分离锁`，同时也可增加锁的伸缩性。<br/>
-这样一个SideTable中存储多个实例对象的引用关系和状态值。下面就进一步看看`SideTable`的结构：
+一般情况是对整个散列表加锁，但程序运行时实例对象的数量非常大，对`StripedMap`的访问会非常频繁，如果每访问一次就对map加锁，会导致程序卡顿，所以为了降低锁的竞争，减少锁的粒度，使用`分离锁`技术---给每个元素加锁而不是整个hash表加锁，同时也增加锁的伸缩性。<br/>
+程序运行时会创建成百上千个对象，而stripedMap的长度只有64，所以hash冲突的概率会非常大，所以这样一个SideTable中存储多个实例对象的引用关系和状态值。下面就进一步看看`SideTable`的结构：
 ```objectivec
 struct SideTable {
     spinlock_t slock;
@@ -49,7 +49,7 @@ struct SideTable {
     ...
 };
 ```
-`slock`是一个锁，SideTable中存储少数对象的引用关系，锁竞争没有`StripedMap`那么大，所以给整个hash表上锁；`spinlock_t`是一种自旋锁，适用于锁使用时间很短的情况，保证线程的安全和效率；<br/>
+`spinlock_t`是一种自旋锁，适用于锁使用时间很短的情况，保证线程的安全和效率；<br/>
 `refcnts`代表实例对象们的引用计数，这里我们先不做讨论。<br/> 
 `weak_table`存储弱引用关系的引用表，是我们重点讨论的结构类型。其结构如下：
 ```objectivec
@@ -60,7 +60,9 @@ struct weak_table_t {
     uintptr_t max_hash_displacement;
 };
 ```
-`weak_table_t`是一个散列表，以实例对象地址的hash值为key，以`weak_entry_t`数组为value。真正存储弱引用关系的结构，其结构如下：
+`weak_table_t`是一个散列表，以实例对象地址的hash值为key，以`weak_entry_t`数组为value。<br/>
+到这一级hash冲突几乎不会发生，一个hash地址对应一个实例对象的弱引用关系。<br/>
+`weak_table_t`是真正存储弱引用关系的结构，其结构如下：
 ```objectivec
 #define WEAK_INLINE_COUNT 4
 #define REFERRERS_OUT_OF_LINE 2
