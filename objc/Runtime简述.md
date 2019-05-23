@@ -36,19 +36,19 @@ union isa_t {
 }
 
 #   define ISA_BITFIELD                                                      \
-      uintptr_t nonpointer        : 1;                                       \
-      uintptr_t has_assoc         : 1;                                       \
-      uintptr_t has_cxx_dtor      : 1;                                       \
-      uintptr_t shiftcls          : 33; /*MACH_VM_MAX_ADDRESS 0x1000000000*/ \
+      uintptr_t nonpointer        : 1; //是否使用nonpointer                                      \
+      uintptr_t has_assoc         : 1; //是否有关联对象                                     \
+      uintptr_t has_cxx_dtor      : 1; //是否自定义析构函数                                   \
+      uintptr_t shiftcls          : 33; /*MACH_VM_MAX_ADDRESS 0x1000000000*/，//calss地址 \
       uintptr_t magic             : 6;                                       \
-      uintptr_t weakly_referenced : 1;                                       \
-      uintptr_t deallocating      : 1;                                       \
-      uintptr_t has_sidetable_rc  : 1;                                       \
-      uintptr_t extra_rc          : 19
+      uintptr_t weakly_referenced : 1;  //是否有弱引用指针                                     \
+      uintptr_t deallocating      : 1;  //是否正在析构                                     \
+      uintptr_t has_sidetable_rc  : 1;  //在sideTable上是否有引用计数，如果有retainCount=extra_rc+sidetable+1\
+      uintptr_t extra_rc          : 19  //引用计数，当extra_rc占满之后在sidetable上继续标记
 ```
 `isa_t` 是一个[union联合体](https://blog.csdn.net/engerled/article/details/6205584)，也就是说cls、bits、ISA_BITFIELD结构体共用同一块地址空间,不同时间存储不同的变量<br/>
-这里我只贴了在手机64位系统下ISA_BITFIELD结构体的定义。存储许多标记位，对象是否有关联对象、弱引用、正在销毁、sideTable引用计数，对象地址等内容。
-KVO通过修改isa指针实现的，所以我们在判断实例类型是最好使用`-calss`方法，而不通过isa。
+这里我只贴了在手机64位系统下ISA_BITFIELD结构体的定义。各个含义如代码注释。这里要注意当使用nonPointer时，实例所属的class存储在`shiftcls`位。<br/>
+KVO通过修改isa指针实现的，所以我们在判断实例类型是最好使用`-class`方法，而不通过isa指针。
 
 #### objc_class
 ```objectivec
