@@ -198,6 +198,24 @@ objc_object::rootRetain(bool tryRetain, bool handleOverflow)
     return (id)this;
 }
 //在sidetable中retainCount加1
+id
+objc_object::sidetable_retain()
+{
+#if SUPPORT_NONPOINTER_ISA
+    assert(!isa.nonpointer);
+#endif
+    SideTable& table = SideTables()[this];
+    
+    table.lock();
+    size_t& refcntStorage = table.refcnts[this];
+    if (! (refcntStorage & SIDE_TABLE_RC_PINNED)) {
+        refcntStorage += SIDE_TABLE_RC_ONE;
+    }
+    table.unlock();
+
+    return (id)this;
+}
+
 bool 
 objc_object::sidetable_addExtraRC_nolock(size_t delta_rc)
 {
@@ -228,8 +246,9 @@ objc_object::sidetable_addExtraRC_nolock(size_t delta_rc)
         return false;
     }
 }
+
 ```
-`retian`中判断在arc时会调用到`rootRetain`。进一步再判断taggpointer和nonpointer。开启nonpinter时先尝试在isa_t中加1，加完如果满了就再sidetable中加1，否则就存储新值并结束；没有开启nonpointer时直接在sidetable中添加。在stripedMap中找到sidetable，再使用sidetable的find方法找到size_t，没找到就新加一个size_t;size_t中判断是否已满，满了就结束，不满就添加，添加之后要根据新值判断是否已满更新标记位，然后存新值结束。
+`retian`中判断在arc时会调用到`rootRetain`。进一步再判断taggpointer和nonpointer。开启nonpinter时先尝试在isa_t中加1，加完如果满了就再sidetable中加1，否则就存储新值并结束；没有开启nonpointer时直接在sidetable中添加。在stripedMap中找到sidetable，再使用sidetable的find方法找到size_t，没找到就新加一个size_t;size_t中判断是否已满，满了就结束，不满就添加，添加之后要根据新值判断是否已满更新标记位，然后存新值结束。<br/>
 
 ### release
 ```objectivec
