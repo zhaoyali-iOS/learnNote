@@ -29,9 +29,34 @@
 * ARC只适用于OC对象，对于C、coreFoundation对像和指针还需我们自己手动管理
 
 ## ARC实现原理
+### 预备知识
+#### tagged pointer
+在runtime的源码中我们总能看到，`isTaggedPointer`的判断。简单来说`TaggedPointer`是决定内存地址结构的一个标记位。<br/>
+CPU的长度决定了数据类型的长度。在64位系统下，基本数据类型使用4个字节就能存储很大的数组，如果使用64个字节存储一个数值，就浪费空间。因此苹果引入了Tagger Point的概念：将对象指针分成两部分，一部分用于存储数据值，另一部分标记这个指针的特殊性。这样指针的值不再是指向另一块内存的地址，而是真正存储的值。最终在这个宏中赋值
+```objectivec
+#if (TARGET_OS_OSX || TARGET_OS_IOSMAC) && __x86_64__
+    // 64-bit Mac - tag bit is LSB
+#   define OBJC_MSB_TAGGED_POINTERS 0
+#else
+    // Everything else - tag bit is MSB
+#   define OBJC_MSB_TAGGED_POINTERS 1
+#endif
+```
+
+* taggedPointer用于存储小对象，如NSDate、NSNumber
+* taggedpointer的值不再指向另一块内存空间，而存储真正的值
+* 读取速度就快很多
+
+#### isa并不总直接指向metaClass和class
+在![Runtime浅析]()中已经介绍了，`isa_t`的结构
+
+#### RefcountMap中的size_t
+在![上一篇](weak原理浅析.md#weak的数据结构)中已经介绍了，存储retainCount的地方在sideTable中的`RefcountMap`。
+
+### 自动改变引用计数值
 
 
-
+## 总结
 
 
 
