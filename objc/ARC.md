@@ -90,7 +90,7 @@ objc_object::ISA()
 ```
 使用`TaggedPointer`时，直接用地址按位相与找到类的编号进而取得类名，这证印证我们上面说到的内容。<br/>
 `ISA()`方法中直接使用bits按位相与取得。可以看出isa_t存储信息除了class还有更多内容。arm64架构下的`isa_t`的结构如图：
-[isa_t](image/isa_t.JPG)
+![isa_t](image/isa_t.JPG)
 
 ### RefcountMap中的size_t
 在[weak原理浅析](weak原理浅析.md#weak的数据结构)中已经介绍了，存储retainCount的地方在sideTable中的`RefcountMap`。
@@ -123,7 +123,7 @@ public:
 #define SIDE_TABLE_RC_ONE            (1UL<<2)  // MSB-ward of deallocating bit
 #define SIDE_TABLE_RC_PINNED         (1UL<<(WORD_BITS-1))
 ```
-[size_t](image/refcountMap_size_t.JPG)
+![size_t](image/refcountMap_size_t.JPG)
 `size_t`的长度跟cpu长度相同，可能32为也可能是64为，中间存储实例的retainCount值。
 如果实例开启了nonpointer，retainCount = extra_rc + sideTableRC + 1;如果没有开启nonpinter，retainCount = extra_rc + 1;
 
