@@ -52,7 +52,7 @@ CPU的长度决定了数据类型的长度。在64位系统下，基本数据类
 * 读取速度就快很多
 
 ### isa并不总直接指向metaClass和class
-在![Runtime浅析](Runtime简述.md#objc_object)中已经介绍了，`isa_t`的结构的原理，知道isa_t是一个联合体，当使用nonpointer时isa_t不只存储Class，还有其他信息。这里我们仔细看看获取对象class方法的实现:NSObject的calss->object_getClass->objc_object::getIsa()->
+在[Runtime浅析](Runtime简述.md#objc_object)中已经介绍了，`isa_t`的结构的原理，知道isa_t是一个联合体，当使用nonpointer时isa_t不只存储Class，还有其他信息。这里我们仔细看看获取对象class方法的实现:NSObject的calss->object_getClass->objc_object::getIsa()->
 ```objectivec
 inline Class 
 objc_object::getIsa() 
@@ -93,7 +93,7 @@ objc_object::ISA()
 [isa_t](image/isa_t.JPG)
 
 ### RefcountMap中的size_t
-在![weak原理浅析](weak原理浅析.md#weak的数据结构)中已经介绍了，存储retainCount的地方在sideTable中的`RefcountMap`。
+在[weak原理浅析](weak原理浅析.md#weak的数据结构)中已经介绍了，存储retainCount的地方在sideTable中的`RefcountMap`。
 ```objectivec
 typedef objc::DenseMap<DisguisedPtr<objc_object>,size_t,true> RefcountMap;
 
@@ -123,7 +123,7 @@ public:
 #define SIDE_TABLE_RC_ONE            (1UL<<2)  // MSB-ward of deallocating bit
 #define SIDE_TABLE_RC_PINNED         (1UL<<(WORD_BITS-1))
 ```
-[size_t](image/RefcountMap_size_t.JPG)
+[size_t](image/refcountMap_size_t.JPG)
 `size_t`的长度跟cpu长度相同，可能32为也可能是64为，中间存储实例的retainCount值。
 如果实例开启了nonpointer，retainCount = extra_rc + sideTableRC + 1;如果没有开启nonpinter，retainCount = extra_rc + 1;
 
