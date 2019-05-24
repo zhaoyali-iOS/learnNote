@@ -446,7 +446,7 @@ objc_object::sidetable_clearDeallocating()
 ```
 dealloc执行顺序
 1. 执行自定义析构函数
-2. 释放关联对象,关联对象也遵循ARC规则，可以看![这篇](associatedObject.md)详细说明。这里一并移除父类和子类的关联对象
+2. 释放关联对象,关联对象也遵循ARC规则，可以看[这篇](associatedObject.md)详细说明。这里一并移除父类和子类的关联对象
 3. 弱引用指针置为nil，并移除weak_entry_t并释放相应空间
 4. 释放RefcountMap中的对应的实例键值对并释放相应空间
 5. 释放实例对象内存空间，根据实例地址、offset和ivar的引用关系做释放release或其他操作，这里一并移除父类和子类的ivar。
