@@ -84,6 +84,8 @@ static void schedule_class_load(Class cls) {
 ```objectivec
 void call_load_methods(void){
      ...
+     //添加自动释放池
+     void *pool = objc_autoreleasePoolPush();
      do {
            //1调用主类的load方法
 
@@ -93,6 +95,8 @@ void call_load_methods(void){
           //2调用分类的load方法
           more_categories = call_category_loads();
      } while (loadable_calsses_used > 0 || more_categories);
+     //倾倒自动释放池
+     objc_autoreleasePoolPop(pool);
      ...
 }
 
@@ -121,7 +125,8 @@ static void call_class_loads(void){
 ```
 `loadable_calsses_used` 标记 `loadable_classes`已使用空间大小<br/>
 `(*load_method)(cls, SEL_load);` 执行load方式是直接找到方法地址直接执行，没有使用消息转发机制<br/>
-从代码实现中看到：先调用主类的+load，在调用分类的+load，分类没有覆盖主类的方法，并且都执行了，这点不同于其他分类覆盖<br/>
+先调用主类的+load，在调用分类的+load，分类没有覆盖主类的方法，并且都执行了，这点不同于其他分类覆盖<br/>
+执行load方法前runtime添加了自动释放池，所以我们在实现load方法是不必再添加自动释放池了；
 
 ## +initialize方法
 
