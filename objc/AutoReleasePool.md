@@ -431,4 +431,6 @@ action->getObj->shareInstance,在getObj中要返回shareInstance的返回值，�
 * 创建新的线程且不会自动创建autorelease
 
 
+## 延伸阅读
+https://www.jianshu.com/p/6f2e2e1eaca0
 
