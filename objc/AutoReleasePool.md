@@ -1,7 +1,7 @@
 ## 引入原因
 普通函数方法中的临时变量的生命范围是方法的左右括号之间，cocoa框架下内存管理使用的是引用计数方法，创建临时对象时retainCount为1，在方法结束前临时对象会被release一次，
 retainCount为0，这样内存就会被废弃，不能在被访问了，这样就会导致在一些需要返回对象的方法中，永远收不到任何返回值。所以就引入了AutoReleasePool，延迟对象的释放。
-这里要强调一点：xcode编译器认为以alloc、new、copy、mutableCopy开头的方法是构造方法，构造方法的返回值时存在的，所以不必放入释放池里。
+这里要强调一点：xcode编译器认为以alloc、new、copy、mutableCopy开头的方法是构造方法，构造方法的返回值是存在的，所以不必放入释放池。
 
 ## 原理
 通过使用`clang -rewrite-objc main.m`发现自动释放池就在开始和结束分别执行了aotoreleasepool的push和pop方法。这里涉及到AutoreleasePoolPage、_objc_autoreleasePoolPush和
@@ -65,9 +65,18 @@ id * end() {
 ![pool_next](image/pool_next.png)
 
 #### POOL_BOUNDARY池子边界
-上面我看知道AutoreleasePoolPage的大小是固定的，每个page里存储的对象地址个数也是固定的，但是我们在编写程序的时在每个autoreleasePool里存放的对象个数是不确定的，runtime是哦怎么解决这个问题的呢？
+```objectivec
+#   define POOL_BOUNDARY nil
+```
+上面我看知道AutoreleasePoolPage的大小是固定的，每个page里存储的对象地址个数也是固定的，但是我们在编写程序的时在每个autoreleasePool里存放的对象个数是不确定的，runtime是怎么解决这个问题的呢？
 通过引入POOL_BOUNDARY标记池子的边界，即两个POOL_BOUNDARY之间的对象在一个pool里。pool token就是池子开始的位置，即低地址POOL_BOUNDARY的位置。如图所示：
 ![pool_boundary](image/pool_boundary.jpeg)
+
+#### EMPTY_POOL_PLACEHOLDER--空池子
+```objectivec
+#   define EMPTY_POOL_PLACEHOLDER ((id*)1)
+```
+表示当前线程创建了一个池子但池子里没有任何对象，即空池子。注意与POOL_BOUNDARY的区别
 
 #### hotPage
 pool中最新操作的链表节点为hotPage，hotPage可以是一个，也可以是多个。尤其是在pop的时候，hotpage是池子里的所有page，即两个POOL_BOUNDARY之间的page。
@@ -93,10 +102,312 @@ TLS(Thread Local Storage)的作用是能将数据和执行的特定的线程联�
 
 
 ### _objc_autoreleasePoolPush
-### _objc_autoreleasePoolPop
+```objectivec
+    static inline void *push() 
+    {
+        id *dest;
+        if (DebugPoolAllocation) {
+            // Each autorelease pool starts on a new pool page.
+            dest = autoreleaseNewPage(POOL_BOUNDARY);
+        } else {
+            dest = autoreleaseFast(POOL_BOUNDARY);
+        }
+        assert(dest == EMPTY_POOL_PLACEHOLDER || *dest == POOL_BOUNDARY);
+        return dest;
+    }
 
+    static inline id *autoreleaseFast(id obj)
+    {
+        AutoreleasePoolPage *page = hotPage();
+        //1当前线程存在hotpage且page还没满
+        if (page && !page->full()) {
+            return page->add(obj);//添加POOL_BOUNDARY边界，池子哨兵位
+        } else if (page) {
+        //2当前线程存在hotpage，但page已满
+            return autoreleaseFullPage(obj, page);//找到page节点后面一个不满的page，然后插入到这个page上，如果都满了就add一个page
+        } else {
+        //3当前线程没有hotPage,这里有两种情况：i没有任何pool，ii有一个空的池子
+            return autoreleaseNoPage(obj);
+        }
+    }
+    
+    static inline AutoreleasePoolPage *hotPage() 
+    {
+        AutoreleasePoolPage *result = (AutoreleasePoolPage *)
+            tls_get_direct(key);
+        //EMPTY_POOL_PLACEHOLDER表示当前线程还没有创建过pool
+        if ((id *)result == EMPTY_POOL_PLACEHOLDER) return nil;
+        if (result) result->fastcheck();
+        return result;
+    }
+```
+不考虑debug环境时_objc_autoreleasePoolPush最终会调用到AutoreleasePoolPage中静态方法autoreleaseFast(id obj)。首先获取hotPage，有就返回，没有就返回nil。这里处理三种不同情况。我们先看第一种情况：有hotpage且不满，直接在hotpage中add。
+```objectivec
+    id *add(id obj)
+    {
+        assert(!full());
+        unprotect();
+        id *ret = next;  // faster than `return next-1` because of aliasing
+        *next++ = obj;   //等价于*next=obj；next++
+        protect();
+        return ret;
+    }
+```
+实现思路很简单：让next指针指向obj，next指针上移。这里传入的obj时POOL_BOUNDARY(nil),其实就是添加了一个池子边界，代表一个新的池子。<br/>
+其次我们看第二种情况：hotpage已满
+```objectivec
+    static __attribute__((noinline))
+    id *autoreleaseFullPage(id obj, AutoreleasePoolPage *page)
+    {
+        // The hot page is full. 
+        // Step to the next non-full page, adding a new page if necessary.
+        // Then add the object to that page.
+        assert(page == hotPage());
+        assert(page->full()  ||  DebugPoolAllocation);
+
+        do {
+            if (page->child) page = page->child;
+            else page = new AutoreleasePoolPage(page);
+        } while (page->full());
+
+        setHotPage(page);
+        return page->add(obj);
+    }
+```
+这里传入两个参数，开始查找的page和要加入的对象obj。从hotpage开始往child查找，直到找得到不满的page，然后把obj插入到找到不满的page；如果找到top-level还没没有符合条件的，就在top-level后创建新的page，在这个新爬个中插入obj。最后更新hotpage<br/>
+最后看第三种情况：创建一个池子
+```objectivec
+    static __attribute__((noinline))
+    id *autoreleaseNoPage(id obj)
+    {
+        // "No page" could mean no pool has been pushed
+        // or an empty placeholder pool has been pushed and has no contents yet
+        assert(!hotPage());
+
+        bool pushExtraBoundary = false;
+        if (haveEmptyPoolPlaceholder()) {
+            // We are pushing a second pool over the empty placeholder pool
+            // or pushing the first object into the empty placeholder pool.
+            // Before doing that, push a pool boundary on behalf of the pool 
+            // that is currently represented by the empty placeholder.
+            pushExtraBoundary = true;
+        }
+        else if (obj != POOL_BOUNDARY  &&  DebugMissingPools) {
+            // We are pushing an object with no pool in place, 
+            // and no-pool debugging was requested by environment.
+            _objc_inform("MISSING POOLS: (%p) Object %p of class %s "
+                         "autoreleased with no pool in place - "
+                         "just leaking - break on "
+                         "objc_autoreleaseNoPool() to debug", 
+                         pthread_self(), (void*)obj, object_getClassName(obj));
+            objc_autoreleaseNoPool(obj);
+            return nil;
+        }
+        else if (obj == POOL_BOUNDARY  &&  !DebugPoolAllocation) {
+            // We are pushing a pool with no pool in place,
+            // and alloc-per-pool debugging was not requested.
+            // Install and return the empty pool placeholder.
+            return setEmptyPoolPlaceholder();
+        }
+
+        // We are pushing an object or a non-placeholder'd pool.
+
+        // Install the first page.
+        AutoreleasePoolPage *page = new AutoreleasePoolPage(nil);
+        setHotPage(page);
+        
+        // Push a boundary on behalf of the previously-placeholder'd pool.
+        if (pushExtraBoundary) {
+            page->add(POOL_BOUNDARY);
+        }
+        
+        // Push the requested object or pool.
+        return page->add(obj);
+    }
+```
+`haveEmptyPoolPlaceholder()`返回YES表示已经存在池子，只是池子里的还没有添加任何对象；返回NO表示没有个任何一个池子被创建；这标记是否要在page上添加POOL_BOUNDARY的边界。
+### _objc_autoreleasePoolPop
+`_objc_autoreleasePoolPop`最终会调用到`pop(void *token)`
+```objectivec
+    static inline void pop(void *token) 
+    {
+        AutoreleasePoolPage *page;
+        id *stop;
+
+        //pop最上层（最外层）的池子，就是pop所有池子
+        if (token == (void*)EMPTY_POOL_PLACEHOLDER) {
+            // Popping the top-level placeholder pool.
+            if (hotPage()) {
+                // coldPage()找到最上层的pool，就是找到链头
+                pop(coldPage()->begin());
+            } else {
+                // Pool was never used. Clear the placeholder.
+                setHotPage(nil);
+            }
+            return;
+        }
+
+        page = pageForPointer(token);//找到token指针所在的page        
+        page->releaseUntil(stop);//从hotpage开始release，直到page的stop位置。
+        ...
+    }
+
+    void releaseUntil(id *stop) 
+    {
+        // Not recursive: we don't want to blow out the stack 
+        // if a thread accumulates a stupendous amount of garbage
+        
+        while (this->next != stop) {
+            // Restart from hotPage() every time, in case -release 
+            // autoreleased more objects
+            //每一次循环从hotpage开始
+            AutoreleasePoolPage *page = hotPage();
+
+            // fixme I think this `while` can be `if`, but I can't prove it
+            //release完一个page后release他的父page
+            while (page->empty()) {
+                page = page->parent;
+                setHotPage(page);
+            }
+
+            page->unprotect();
+            id obj = *--page->next;
+            memset((void*)page->next, SCRIBBLE, sizeof(*page->next));
+            page->protect();
+
+            if (obj != POOL_BOUNDARY) {
+                objc_release(obj);
+            }
+        }
+
+        //release到指定的位置后，更新hotPage
+        setHotPage(this);
+    }
+```
+### autorelease
+我们直到编译器会在代码中合适位置插入`[obj autorelease]`的代码。这个方法最终会待用到`autorelease(id obj)`
+```objectivec
+    static inline id autorelease(id obj)
+    {
+        assert(obj);
+        assert(!obj->isTaggedPointer());
+        id *dest __unused = autoreleaseFast(obj);
+        assert(!dest  ||  dest == EMPTY_POOL_PLACEHOLDER  ||  *dest == obj);
+        return obj;
+    }
+```
+这个方法最终也会调用到`autoreleaseFast`,和`_objc_autoreleasePoolPush`不同的是,这里传入参数是实例地址而不是nil。
+
+### 返回值的优化
+文章开始我们提到，引入autoreleasePool是为了在有返回值的函数中延迟释放返回值内存。通过探究sutoreleasePool的实现原理，我们直到使用autoreleasePool的开销比较大，为了让程序更快，苹果爸爸对这个进行了优化，减少加入自动释放池的操作。
+```objectivec
+//定义Person类，并实现方法shareInstance
+@interface Person : NSObject
+
++ (Person *)shareInstance;
+
+@end
+
+@implementation Person
+
++ (Person *)shareInstance {
+    Person *p = [Person new];
+    NSLog(@"%@",p);
+    return p;
+}
+
+@end
+
+//在viewcontroller的方法里调用person类
+- (IBAction)action {
+    Person *obj = [Person shareInstance];
+    NSLog(@"%@",obj);
+}
+```
+断点执行代码，最终没有把创建的person实例添加到autoreleasePool中。执行了`objc_autoreleaseReturnValue`和`objc_retainAutoreleasedReturnValue`方法。
+```objectivec
+id 
+objc_retainAutoreleaseReturnValue(id obj)
+{
+    if (prepareOptimizedReturn(ReturnAtPlus0)) return obj;
+
+    return objc_retainAutoreleaseAndReturn(obj);
+}
+```
+objc_retainAutoreleaseReturnValue中有if判断，如果if条件通过就会使用优化机制，否则就正常加入到autoreleasepool中。
+```objectivec
+static ALWAYS_INLINE bool 
+prepareOptimizedReturn(ReturnDisposition disposition)
+{
+    assert(getReturnDisposition() == ReturnAtPlus0);
+
+    if (callerAcceptsOptimizedReturn(__builtin_return_address(0))) {
+        if (disposition) setReturnDisposition(disposition);
+        return true;
+    }
+
+    return false;
+}
+```
+`__builtin_return_address(0)`获取函数返回地址的层级，就是获取从当前函数调用层级的外面的第0个层级，即函数的调用者的层级。
+```objectivec
+static ALWAYS_INLINE bool 
+callerAcceptsOptimizedReturn(const void * const ra0)
+{
+    const uint8_t *ra1 = (const uint8_t *)ra0;
+    const unaligned_uint16_t *ra2;
+    const unaligned_uint32_t *ra4 = (const unaligned_uint32_t *)ra1;
+    const void **sym;
+    
+    ...//获取调用函数的实现
+    
+    sym = (const void **)ra1;
+    //判断函数的实现中是否会调用objc_retainAutoreleasedReturnValue 或者objc_unsafeClaimAutoreleasedReturnValue
+    if (*sym != objc_retainAutoreleasedReturnValue  &&  
+        *sym != objc_unsafeClaimAutoreleasedReturnValue) 
+    {
+        return false;
+    }
+
+    return true;
+}
+```
+如果函数调用者会调用objc_retainAutoreleasedReturnValue或者objc_unsafeClaimAutoreleasedReturnValue；满足条件说明调用方在ARC环境下且支持返回值快速释放机制，然后会根据需要通过`setReturnDisposition`方法，把返回值存储在TLS中。
+```objectivec
+static ALWAYS_INLINE void 
+setReturnDisposition(ReturnDisposition disposition)
+{
+    tls_set_direct(RETURN_DISPOSITION_KEY, (void*)(uintptr_t)disposition);
+}
+```
+这样提前判断逻辑是否需要放入autoreleasepool中，进而减少autoreleasePool的开销，同时也加快返回值的释放。<br/>
+下面这个实例代码是会加入到autoreleasePool中
+```objectivec
+//返回值经过大于一次返回
+- (IBAction)action {
+    self.obj = [self getObj];
+    NSLog(@"%@",self.obj);
+}
+
+- (Person *)getObj {
+    Person *obj = [Person shareInstance];
+    NSLog(@"%@",obj);
+    return obj;
+}
+```
 
 ## 特点总结
-```objectivec
+* 在非构造方法中有返回值且使用引用计数管理内存时，会导致返回值被释放，调用方取不到返回值的问题。苹果使用autoreleasePool来延迟释放对象，来解决此问题。
+* AutoreleasePool是一个双向链表指针栈。会使加入到自动释放池的实例retainCount+1，会延迟释放对象。
+* push创建一个池子，pop倾倒池子。`@autorelease{`代表push一个池子，`}`代表pop池子。
+* 当开辟一个新池子时，就向链表hotpage节点加入一个指向为POOL_BOUNDARY(nil)的指针(哨兵位)，作为池子与池子的边界。
+* AutoreleasePool的链表是以AUtoreleasePoolPage为节点，节点固定4096bit，地位存储page的成员变量，高位存储加入的实例。
+* parent和child指针链接不同的节点构成双向链表；next指针标记page下一次存储位置。
+* 通过TLS优化加入与移除操作的开销。尤其是在有返回值的非构造方法中应用。不同的线程中有不同的链表。
+* 含有block快的枚举也自动加入autoreleasePool，来加快一次循环中实例的销毁。for和for-in中没有。
 
-```
+
+
+
+
+
