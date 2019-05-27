@@ -1,7 +1,7 @@
 ## 引入原因
 普通函数方法中的临时变量的生命范围是方法的左右括号之间，cocoa框架下内存管理使用的是引用计数方法，创建临时对象时retainCount为1，在方法结束前临时对象会被release一次，
 retainCount为0，这样内存就会被废弃，不能在被访问了，这样就会导致在一些需要返回对象的方法中，永远收不到任何返回值。所以就引入了AutoReleasePool，延迟对象的释放。
-这里要强调一点：xcode编译器认为以alloc、new、copy、mutableCopy开头的方法是构造方法，构造方法的返回值是存在的，所以不必放入释放池。
+* 这里要强调一点：xcode编译器认为以alloc、new、copy、mutableCopy开头的命名的方法是构造方法，构造方法的返回值在内部已经做了retain操作，所以不必放入释放池。不以这些开头命名的方法都是普通方法，会把返回值自动加入到autorelease中。（后面说苹果对返回值的优化，这里先理解成自动加入释放池）
 
 ## 原理
 通过使用`clang -rewrite-objc main.m`发现自动释放池就在开始和结束分别执行了aotoreleasepool的push和pop方法。这里涉及到AutoreleasePoolPage、_objc_autoreleasePoolPush和
