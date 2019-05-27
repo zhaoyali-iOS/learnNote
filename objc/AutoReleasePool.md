@@ -225,7 +225,7 @@ TLS(Thread Local Storage)的作用是能将数据和执行的特定的线程联�
         return page->add(obj);
     }
 ```
-`haveEmptyPoolPlaceholder()`返回YES表示已经存在池子，只是池子里的还没有添加任何对象；返回NO表示没有个任何一个池子被创建；这标记是否要在page上添加POOL_BOUNDARY的边界。
+`haveEmptyPoolPlaceholder()`返回YES表示已经存在池子，只是池子里的还没有添加任何对象；返回NO表示没有个任何一个池子被创建；这标记是否要在page上添加POOL_BOUNDARY的边界。这里可以知道即便在子线程中也会在需要的时候自动创建autoreleasePool，不需要我们手动创建
 ### _objc_autoreleasePoolPop
 `_objc_autoreleasePoolPop`最终会调用到`pop(void *token)`
 ```objectivec
@@ -420,6 +420,7 @@ action->getObj->shareInstance,在getObj中要返回shareInstance的返回值，�
 * AutoreleasePool的链表是以AUtoreleasePoolPage为节点，节点固定4096bit，地位存储page的成员变量，高位存储加入的实例。
 * parent和child指针链接不同的节点构成双向链表；next指针标记page下一次存储位置。
 * 通过TLS优化加入与移除操作的开销。尤其是在有返回值的非构造方法中应用。不同的线程中有不同的链表。
+* 子线程的pool会在需要的时候自动创建，不需要我们手动创建。
 * 含有block快的枚举也自动加入autoreleasePool，来加快一次循环中实例的销毁。for和for-in中没有。
 * 同样这个对OC对象才起作用，C对象不起作用。
 
