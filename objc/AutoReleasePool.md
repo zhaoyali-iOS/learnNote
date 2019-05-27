@@ -299,7 +299,7 @@ TLS(Thread Local Storage)的作用是能将数据和执行的特定的线程联�
 这个方法最终也会调用到`autoreleaseFast`,和`_objc_autoreleasePoolPush`不同的是,这里传入参数是实例地址而不是nil。
 
 ### 返回值的优化
-文章开始我们提到，引入autoreleasePool是为了在有返回值的函数中延迟释放返回值内存。通过探究sutoreleasePool的实现原理，我们直到使用autoreleasePool的开销比较大，为了让程序更快，苹果爸爸对这个进行了优化，减少加入自动释放池的操作。
+文章开始我们提到，引入autoreleasePool是为了在有返回值的函数中延迟释放返回值内存。通过探究autoreleasePool的实现原理，我们知道使用autoreleasePool的开销比较大，为了让程序更快，苹果爸爸对这个进行了优化，减少加入自动释放池的操作。
 ```objectivec
 //定义Person类，并实现方法shareInstance
 @interface Person : NSObject
@@ -324,7 +324,23 @@ TLS(Thread Local Storage)的作用是能将数据和执行的特定的线程联�
     NSLog(@"%@",obj);
 }
 ```
-断点执行代码，最终没有把创建的person实例添加到autoreleasePool中。执行了`objc_autoreleaseReturnValue`和`objc_retainAutoreleasedReturnValue`方法。
+按着我们对autoreleasePool的理解，编译后会自动在插入代码，最终如下：
+```objectivec
++ (Person *)shareInstance {
+    Person *p = [Person new];
+    [p autorelease];//自动插入代码
+    NSLog(@"%@",p);
+    return p;
+}
+
+- (IBAction)action {
+    Person *obj = [Person shareInstance];
+    [obj autorelease];//自动插入的代码
+    NSLog(@"%@",obj);
+}
+```
+我们可以看到person实例从创建到使用经历了两次autorelease，即两次retian和release；一次创建一次使用却要经过两次retain和release，显然是效率低的，所以对返回值进行优化。<br/>
+在return前，先调用`objc_retainAutoreleaseReturnValue`。
 ```objectivec
 id 
 objc_retainAutoreleaseReturnValue(id obj)
@@ -349,7 +365,7 @@ prepareOptimizedReturn(ReturnDisposition disposition)
     return false;
 }
 ```
-`__builtin_return_address(0)`获取函数返回地址的层级，就是获取从当前函数调用层级的外面的第0个层级，即函数的调用者的层级。
+`__builtin_return_address(0)`获取函数返回地址的层级，就是获取从当前函数调用层级的外面的第0个层级，即函数的调用者的层级。在本代码中，action调用了shareinstance，`__builtin_return_address(0)`的结果就是action方法的层级。
 ```objectivec
 static ALWAYS_INLINE bool 
 callerAcceptsOptimizedReturn(const void * const ra0)
@@ -372,7 +388,7 @@ callerAcceptsOptimizedReturn(const void * const ra0)
     return true;
 }
 ```
-如果函数调用者会调用objc_retainAutoreleasedReturnValue或者objc_unsafeClaimAutoreleasedReturnValue；满足条件说明调用方在ARC环境下且支持返回值快速释放机制，然后会根据需要通过`setReturnDisposition`方法，把返回值存储在TLS中。
+如果函数调用者会调用objc_retainAutoreleasedReturnValue或者objc_unsafeClaimAutoreleasedReturnValue；满足条件说明调用方在ARC环境下且支持返回值快速释放机制，然后会根据需要通过`setReturnDisposition`方法，把返回值存储在TLS中。在本demol中就是判断action方法是否在ARC环境下，显然是符合条件的。
 ```objectivec
 static ALWAYS_INLINE void 
 setReturnDisposition(ReturnDisposition disposition)
@@ -380,7 +396,7 @@ setReturnDisposition(ReturnDisposition disposition)
     tls_set_direct(RETURN_DISPOSITION_KEY, (void*)(uintptr_t)disposition);
 }
 ```
-这样提前判断逻辑是否需要放入autoreleasepool中，进而减少autoreleasePool的开销，同时也加快返回值的释放。<br/>
+这样提前判断逻辑是否需要放入autoreleasepool中，进而减少autoreleasePool的开销，同时也加快返回值的释放。本demol中，action希望返回值是个临时变量，所以把shareInstance中创建的person实例存储在TLS中，在action中直接从TLS中取值，这样从person实例创建到最后释放，没有进行retain和release实现了同样逻辑。相比优化前节省了两个retain和release操作，效率大大提高。
 下面这个实例代码是会加入到autoreleasePool中
 ```objectivec
 //返回值经过大于一次返回
@@ -395,19 +411,23 @@ setReturnDisposition(ReturnDisposition disposition)
     return obj;
 }
 ```
-
+action->getObj->shareInstance,在getObj中要返回shareInstance的返回值，即希望shareInstance的retainCount为1，所以在shareInstance方法中会把person实例加入到autoreleasepool中。这样在action方法中经过几次return也能取到实例的值。
 ## 特点总结
 * 在非构造方法中有返回值且使用引用计数管理内存时，会导致返回值被释放，调用方取不到返回值的问题。苹果使用autoreleasePool来延迟释放对象，来解决此问题。
 * AutoreleasePool是一个双向链表指针栈。会使加入到自动释放池的实例retainCount+1，会延迟释放对象。
-* push创建一个池子，pop倾倒池子。`@autorelease{`代表push一个池子，`}`代表pop池子。
+* push创建一个池子，pop倾倒池子。`@autorelease{`代表push一个池子，`}`代表pop池子。加入池子时给对象发送retian消息，pop池子是给每一个对象发送release消息。
 * 当开辟一个新池子时，就向链表hotpage节点加入一个指向为POOL_BOUNDARY(nil)的指针(哨兵位)，作为池子与池子的边界。
 * AutoreleasePool的链表是以AUtoreleasePoolPage为节点，节点固定4096bit，地位存储page的成员变量，高位存储加入的实例。
 * parent和child指针链接不同的节点构成双向链表；next指针标记page下一次存储位置。
 * 通过TLS优化加入与移除操作的开销。尤其是在有返回值的非构造方法中应用。不同的线程中有不同的链表。
 * 含有block快的枚举也自动加入autoreleasePool，来加快一次循环中实例的销毁。for和for-in中没有。
+* 同样这个对OC对象才起作用，C对象不起作用。
 
-
-
+## 使用场景
+* 写基于命令行的代码，即没有UIKit内容
+* 写循环，循环里会大量创建临时对象
+* 长时间在后台运行的任务
+* 创建新的线程且不会自动创建autorelease
 
 
 
