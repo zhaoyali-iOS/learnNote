@@ -62,7 +62,7 @@ id * end() {
 }
 ```
 一图胜百字，我们直接看图
-![pool_next](image/pool_next.png)
+![pool_next](image/pool_next.JPG)
 
 #### POOL_BOUNDARY池子边界
 ```objectivec
