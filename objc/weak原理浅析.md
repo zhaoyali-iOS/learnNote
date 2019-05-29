@@ -1,7 +1,7 @@
 ## weak
 简单来说weak就是，不增加对象的retainCount，当引用对象释放时弱引用指针自动置为nil来避免错误的内存访问(指针访问是安全的)。可以用于解决循环引用的问题。
 
-## weak的数据结构
+## weak的数据结构--存储结构
 ![weak_struct](image/weak.jpeg)
 如上图所示，有一个全局的`stripedMap<SideTable>`字典,`StripedMap`的结构如下：
 
@@ -89,8 +89,7 @@ struct weak_entry_t {
 ```
 `referent`是弱引用指针指向对象的地址;`referrers`和`inline_referrers`是一个联合体,用于存储弱引用的指针，少于REFERRERS_OUT_OF_LINE时用`inline_referrers`存储弱引用指针，否则用`referrers`;通过`out_of_line`方法判断当前联合体是哪个结构<br/>
 
-## weak的使用
-### 添加、移除、全部清除的内部实现方法
+## weak数据结构的增删改
 通过weak的数据结构我们知道，真正存储弱引用关系的是`weak_entry_t`数据。同时在`objc-weak.h`中还定义了修改弱用用关系的方法。
 ```objectivec
 /// Adds an (object, weak pointer) pair to the weak table.
@@ -105,22 +104,9 @@ void weak_clear_no_lock(weak_table_t *weak_table, id referent);
 ```
 `weak_register_no_lock`是添加一个弱引用指针和指向，如果sideTable总找不到就新建一个weak_entry_t到weak_table_t中，其实现如下图：
 ![weak_register](image/weak_register.JPG)
-`weak_unregister_no_lock`是移除弱引用对，逻辑是：首先找到weak_entry_t，然后在inLine或outIfLine中对应的弱指针置为nil，如果移除的是最后一个弱指针，那么就把entry从weak_table_t中移除<br/>
+`weak_unregister_no_lock`是移除某一对弱引用，逻辑是：首先找到weak_entry_t，然后在inLine或outIfLine中对应的弱指针置为nil，如果移除的是最后一个弱指针，那么就把entry从weak_table_t中移除<br/>
 `weak_clear_no_lock`是清空对象的所有弱指针，逻辑是：1.找到weak_entry_t，2.遍历inLine或outIfLine将所有弱指针都置为nil，3.entry从weak_table_t中移除<br/>
-
-### 内部方法的调用时机
-当我们使用`weak`关键字的时候都会自动调用到这些方法。
-```objectivec
-//1.
-NSObject *obj = [[NSObject alloc]init];
-__weak id weakObj = obj;
-//2.给@property(nonatomic,weak)xxx;属性赋值时
-//3.
-__weak id weakObj2 = weakObj；
-```
-第1和2种情况会调用`objc_storeWeak`->`storeWeak`<br/>
-第3种情况会调用`objc_copyWeak`->`objc_initWeak`->`storeWeak`<br/>
-`storeWeak`的实现如下：
+`weak_register_no_lock`和`weak_unregister_no_lock`是被`storeWeak`触发的。`storeWeak`的实现如下：
 ```objectivec
 template <HaveOld haveOld, HaveNew haveNew,
           CrashIfDeallocating crashIfDeallocating>
@@ -185,8 +171,7 @@ storeWeak(id *location, objc_object *newObj)
 ```
 思路很清晰：给弱指针旧的指向对象做清除操作，给新的对象增加弱引用指针地址，返回新指向的对象<br/>
 
-
-上面我们已经提到了，在对象销毁时会调用`weak_clear_no_lock`清除所有的弱引用指针。`dealloc`->`_objc_rootDealloc`->`objc_object::rootDealloc`->`object_dispose`->`objc_destructInstance`
+`weak_clear_no_lock`是在对象销毁时会被调用。`dealloc`->`_objc_rootDealloc`->`objc_object::rootDealloc`->`object_dispose`->`objc_destructInstance`
 ```objectivec
 void *objc_destructInstance(id obj) 
 {
@@ -204,9 +189,109 @@ void *objc_destructInstance(id obj)
     return obj;
 }
 ```
-`objc_object::sidetable_clearDeallocating`最终会调用到`weak_clear_no_lock`和`RefcountMap::erase` 。`weak_clear_no_lock`前面已经分析过了，`RefcountMap::erase`是ARC相关的，这里我们只做了解先不详细展开。
+`objc_object::sidetable_clearDeallocating`最终会调用到`weak_clear_no_lock`和`RefcountMap::erase` 。`weak_clear_no_lock`前面已经分析过了，`RefcountMap::erase`是ARC相关的，这里我们只做了解先不详细展开。<br/><br/>
+
+综上所述：weak_table_t的修改是通过`storeWeak`和`dealloc`两个方法触发。下面我们就研究`storeWeak`是怎么样被调用的。
+
+## weak实践
+明白了weak的存储结构和修改方法等一些内部实现技术原理后，我们在编写什么样的代码时会执行这些内部实现呢。
+### 声明或赋值__weak指针
+```objectivec
+//1.声明弱引用指针
+__weak id weakObj;
+//2.声明并初始化弱引用指针
+__weak NSObject* weakObj = [[NSObject alloc]init];
+//3.给@property(nonatomic,weak)id weakObj;属性赋值时
+self.weakObj = [[NSObject alloc]init];
+//4.修改弱引用指针
+__weak NSObject* weakObj = [[NSObject alloc]init];
+weakObj = self.view;
+```
+上面这些情况都会调用到`objc_initWeak`
+```objectivec
+id
+objc_initWeak(id *location, id newObj)
+{
+    if (!newObj) {
+        *location = nil;
+        return nil;
+    }
+
+    return storeWeak<DontHaveOld, DoHaveNew, DoCrashIfDeallocating>
+        (location, (objc_object*)newObj);
+}
+```
+`objc_initWeak`的实现是：做非空判断后调用`storeWeak`方法，这个方法上面我们也已经分析过了。
+
+### copy弱引用指针
+```objectivec
+__weak id weakObj = self.view;
+__weak id weakObj2 = weakObj;
+```
+给weakObj赋值会调用到`objc_initWeak`，但是给weakObj2赋值时会调用到`objc_copyWeak`
+```objectivec
+void
+objc_copyWeak(id *dst, id *src)
+{
+    id obj = objc_loadWeakRetained(src);
+    objc_initWeak(dst, obj);
+    objc_release(obj);
+}
+```
+### 使用弱引用指针
+```objectivec
+//1.
+__weak NSObject* weakObj = [[NSObject alloc]init];
+NSLog(@"%@",weakObj);
+//2.
+__weak id weakObj = self.view;
+NSLog(@"%@",weakObj);
+```
+第一种情况会直接调用`objc_loadWeakRetained`,第二种情况会调用`objc_loadWeak`。
+```objectivec
+id
+objc_loadWeakRetained(id *location)
+{
+    id obj;
+    id result;
+    SideTable *table;
+    obj = *location;
+    .....
+    if (!obj) return nil;
+    if (obj->isTaggedPointer()) return obj;
+   
+    table = &SideTables()[obj];
+    table->lock();
+    ...
+    
+    result = obj;
+    table->unlock();
+    return result;
+}
+
+id
+objc_loadWeak(id *location)
+{
+    if (!*location) return nil;
+    return objc_autorelease(objc_loadWeakRetained(location));
+}
+```
+二者的区别:是否加入自动释放池。第一种情况应该是编译器根据变量的使用情况知道，不必加入自动释放池就能保证弱引用指针在使用期间一直能访问到。第二种情况编译器为了保证弱引用指针在使用期间其间不被释放，所以加入到自动释放池。
+
+### 释放弱引用指针
+在方法结束，弱引用指针变量释放，就会调用到`objc_destroyWeak`方法。
+```objectivec
+void
+objc_destroyWeak(id *location)
+{
+    (void)storeWeak<DoHaveOld, DontHaveNew, DontCrashIfDeallocating>
+        (location, nil);
+}
+```
+其实就是给指针弱引用指针赋nil值，删除这个弱引用指针。
 
 ## StripedMap的初始化
+到此我们明白了weak的实现原理和使用，所有这些都是以sidetable为基础的，那么这个sidetable是在什么时候创建初始化的呢？<br/>
 我们知道iOS中的libobjc.dylib动态库中包含objc和runtime的源码，所以在加载这个动态库的时候会调用到`_objc_init`
 ```objectivec
 void _objc_init(void)
