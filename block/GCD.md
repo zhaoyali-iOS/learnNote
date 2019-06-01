@@ -143,8 +143,8 @@ dispatch_group用于监视多个异步任务的执行结果，dispatch_group_t�
 
 ### dispatch_barrier
 `dispatch_barrier_async`确保指定的任务在指定的并发队列中执行此任务时唯一执行的任务。先于此任务加入的任务都执行结束之后才开始执行此任务，
-在此任务执行期间保证只执行这一个任务，当此任务结束之后，再并发执行此任务后面的其他任务。
-需要注意`dispatch_barrier_async`只适用于并发队列，串行队列没必要使用这个；只在自己创建并发队列上有这种作用，在全局并发队列上没有效果，在串行队列上和dispatch_sync一样。
+在此任务执行期间保证只执行这一个任务，当此任务结束之后，再并发执行此任务后面的其他任务。<br/>
+需要注意`dispatch_barrier_async`只适用于自己创建的并发队列，串行队列没必要；只在自己创建并发队列上有这种作用，在全局并发队列上没有效果，在串行队列上和dispatch_sync一样。
 ```objectivec
     dispatch_queue_t globalQueue = dispatch_queue_create("com.knowledge.viewcontroller", DISPATCH_QUEUE_CONCURRENT);
     dispatch_async(globalQueue, ^{
@@ -201,7 +201,7 @@ dispatch_group用于监视多个异步任务的执行结果，dispatch_group_t�
 在多线程下保证代码只执行一次，百分百保证。多用于单例模式。
 ### dispatch_suspend和dispatch_resume
 `dispatch_suspend` 挂起任务队列，已经开始执行的任务不起作用，尚未开始的任务不在执行。<br/>
-`dispatch_resume` 恢复队列状态，继续任务中为开始执行的任务
+`dispatch_resume` 恢复队列状态，继续任务中为开始执行的任务，这两个要成对使用。
 
 ### dispatch_block_t
 GCD中任务都是以block的方式加入到队列中。`dispatch_block_t`就是用来描述任务的。这个是在iOS8之后添加的新接口。
@@ -275,3 +275,8 @@ dispatch_block_cancel(block1);
 
 ## 内存管理
 在ARC环境，我们无需管理，GCD会像对待OC对象一样自动内存管理。
+主队类列有runloop，肯定也有自动释放池。GCD的全局队列中也有自动释放池，帮我们管理block中的对象引用关系。
+        
+	
+	
+	
