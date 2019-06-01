@@ -419,12 +419,32 @@ void *objc_destructInstance(id obj)
         bool assoc = obj->hasAssociatedObjects();
 
         // This order is important.
-        if (cxx) object_cxxDestruct(obj);//自定义析构函数
+        if (cxx) object_cxxDestruct(obj);//调用自定义dealloc，会从当前类到父类自动调用。最终会调用object_cxxDestructFromClass方法
         if (assoc) _object_remove_assocations(obj);//移除关联对象
         obj->clearDeallocating();//会调用到sidetable_clearDeallocating，清空sidetable中的weak和retainCount资源
     }
 
     return obj;
+}
+
+static void object_cxxDestructFromClass(id obj, Class cls)
+{
+    void (*dtor)(id);
+
+    //从当前类开始依次向上执行dealloc方法
+    for ( ; cls; cls = cls->superclass) {
+        if (!cls->hasCxxDtor()) return; 
+        //只在当前类中查找dealloc方法的IMP
+        dtor = (void(*)(id))
+            lookupMethodInClassAndLoadCache(cls, SEL_cxx_destruct);
+        if (dtor != (void(*)(id))_objc_msgForward_impcache) {
+            if (PrintCxxCtors) {
+                _objc_inform("CXX: calling C++ destructors for class %s", 
+                             cls->nameForLogging());
+            }
+            (*dtor)(obj);
+        }
+    }
 }
 
 void 
@@ -444,13 +464,22 @@ objc_object::sidetable_clearDeallocating()
     table.unlock();
 }
 ```
-dealloc执行顺序
-1. 执行自定义析构函数
+#### 系统dealloc实现
+1. 执行自定义dealloc，从object_cxxDestructFromClass可以看到，会自动调用父类dealloc，所以我们在实现dealloc时不需要显示的调用super
 2. 释放关联对象,关联对象也遵循ARC规则，可以看[这篇](associatedObject.md)详细说明。这里一并移除父类和子类的关联对象
 3. 弱引用指针置为nil，并移除weak_entry_t并释放相应空间
 4. 释放RefcountMap中的对应的实例键值对并释放相应空间
-5. 释放实例对象内存空间，根据实例地址、offset和ivar的引用关系做释放release或其他操作，这里一并移除父类和子类的ivar。
+5. 释放实例对象内存空间，猜测这里操作是：根据实例地址、offset和ivar的引用关系做release或其他操作，这里一并移除父类和子类的ivar。
 
+#### dealloc方法调用的时机
+在上面分析`release`方法时，我们知道，在-1操作时会判断是否应该执行`dealloc`，判断的条件是：-1操作溢出就要执行dealloc。所以runtime会自动发起dealloc方法，我们不能显示的调用。
 
+#### 什么时候需要实现dealloc
+通过分析dealloc方法，我们知道，实例被释放时先执行自定义的dealloc方法，在执行内部的释放流程。
+1. 在系统的dealloc方法的第5步是执行类内部的属性和实例变量的引用关系释放，而它只能处理OC对象，对于非OC对象是处理不了的，这个时候就需要我们自己在dealoc方法中释放。
+2. 添加NSNotificationCenter，KVO等订阅的也要自己移除，以免发生内存泄露。
+3. dealloc方法里最好不要再调用其他方法，防止调用的其他方法有异步任务等，这会引起很多的问题，甚至导致程序crash。
+4. dealloc方法里也不要调用setter和getter，防止有KVO，在做其他操作而引发错误。
+5. 如果对象持有文件描述等系统资源、开销较大的资源、大块内存等资源时，应该专门用一个方法(close)实现资源释放并向使用者约定好(不使用时就释放)，不要在dealloc中去释放这些资源。
 
 
