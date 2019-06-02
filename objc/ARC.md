@@ -20,7 +20,13 @@
 * 不能手动发送retain、release、autoRelease、retainCount、dealloc消息，编译器会帮我们自动插入这些代码；可以实现dealloc方法，实现时不用在调super，会自动调用
 * OC中不能使用NSZone、NSAllocateObject和NSDeallocateObject
 * ARC只适用于OC对象，对于C、coreFoundation对像和指针还需我们自己手动管理
-* ARC使内存延迟释放，可以使用自动释放池代码块，来加快释放。关于autoreleasepool可以看[这篇]()文章。
+
+### 编译器自动插入的规则
+* 以alloc、new、copy、mutableCopy开头命名的方法，编译器认为是构造函数，在返回实例时会自动插入retian。
+* 强引用的地方插入retain，eg：给变量赋值
+* 不在使用的地方插入release，eg：给变量赋nil，修改变量值，方法结束
+* 函数有返回值且返回类型为对象时，在return对象时插入autorelease，使值跨越方法边界依然有效。xcode对这个做了优化来降低rentain和release的成本，[详细说明看这里](AutoReleasePool.md#返回值的优化)
+* block会自动实现copy
 
 ### 循环引用问题
 出现循环应用的场景：当A使用了B，B里的处理逻辑也使用A，导致二者互相持有，互相等待被释放，最后retainCount都不会减为0，内存资源就不会被释放回收。<br/>
