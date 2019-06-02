@@ -2,7 +2,9 @@
 ## +load方法
 
 ### +load的执行时机
-运行时系统初始化之后，每次加载镜像文件时，当所有类已经加载到内存中时，就会检查是否有load符号，如果有就会调用load。这些都是在main函数之前执行
+运行时系统初始化之后，每次加载镜像文件时，镜像文件中的类已经加载到内存中时，就会检查是否有load符号，如果有就会调用load。这些都是在main函数之前执行。<br/>
+因为镜像文件分多次加载的，如果在A类的load的实现中用到B类，那么就要先执行B类的load，同样执行B类的load方法要先确定B类的继承父类，可能B类在其他框架里还没加载，这样就会出现问题。所以尽量避免在laod方法中依赖其他的类，只做与本类相关的事情。<br/>
+程序在加载我们自定义的类之前，必定已经加载了系统的framework，所以实现load方法时使用系统类没有关系，但是自定义的其他类，第三方库的类最好不要依赖。
 
 ### +load的执行顺序
 * 先父后子--父类执行完后再执行子类
@@ -14,7 +16,6 @@
 * 运行期间只调用一次
 * 主类和分类的+load方法都执行，这不同于其他方法--分类会覆盖主类方法
 * 日常开发中接触到的调用最靠前的方法
-* 由于类之间调用前后不确定，load中涉及其他类时会有危险，但所有的系统framework都已经加载完成，调用系统framework(UIKit)里面的方法是安全的
 * 不会沿用父类的实现 `load方法的执行没有通过消息转发机制，而是直接取IMP地址执行` 
 
 ### 准备+load--确保先父类后子类
@@ -132,11 +133,11 @@ static void call_class_loads(void){
 
 ### +initialize的执行时机
 * 简单来说就是当第一次给类发送消息时会触发+initialize方法。
-* 详细说来，当libobjc等动态库加载后，runtime初始化(`_objc_init`调用)完成，`map_images`和`load_images`方法执行之后,第一次向类发送消息时执行。+load方法的执行是直接取函数地址执行，没有通过消息转发机制，所以+load方法不会触发+initialize方法，load要先与initialize执行。
+* 详细说来，当libobjc等动态库加载后，runtime初始化(`_objc_init`调用)完成，`map_images`和`load_images`方法执行之后,第一次向类发送消息时执行。+load方法的执行是直接取函数地址执行，没有通过消息转发机制，所以+load方法不会触发+initialize方法，load要先于initialize执行。
 * 在main函数之前会有其他的类已经初始化了，所以initialize方法在main函数前和后都会执行，一般我们自己定义类的initialize方法是在main函数之后执行。
 * initialize方法有可能永远不会执行到。
 
-### +initialize的代码实现
+### +initialize的内部实现
 在+initialize方法处打断点看到，通过`_class_initialize`调用了initialize方法
 ```objectivec
 void _class_initialize (Class cls) {
@@ -205,7 +206,11 @@ static void _finishInitializing (Class cls, Class supercls) {
 * 在调用当前类的initialize方法时使用了消息转发机制，会导致父类的方法被调用多次，分类会覆盖主类的方法
 * +initilaze是线程安全的
 
-
+### +initialize的实现注意事项
+* 这个方法同load一样不建议我们自己显示调用，runtime会自动调用。
+* 为了防止我们自己调用执行多次发生错误，我们一般会在实现时使用`dispatch_onece`。同时这样也可以防止runtime系统多次调用而发生问题。
+* 实现中只配置数据，不要依赖其他类，更不要调用本类的其他方法。防止其他类的数据没配置好，防止本类的其他方法的实现依赖的数据没有配置好。
+* 无法在编译期设定的全局变量，可以方法initialize方法里初始化。
 
 ## +load和+initialize方法比较
 项目|+load|+initialize
@@ -217,5 +222,6 @@ static void _finishInitializing (Class cls, Class supercls) {
 沿用父类实现|否|是
 分类实现|不覆盖，主类和分类都执行|分类会覆盖主类
 
+
 * 调用顺序中，load不能保证父类的分类和子类的分类的顺序，这个取决于编译的顺序。<br/>
-* 这里的调用次数是指runtime系统的调用次数，但是程序员仍然可以显示的调用这两个方法，所以为了安全我们一般在实现时也会使用dispatch_once。
+* 这里的调用次数是指runtime系统的调用次数，但是程序员仍然可以显示的调用这两个方法，但一般不建议这样做。所以为了安全我们一般在实现时也会使用dispatch_once。
