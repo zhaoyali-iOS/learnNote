@@ -34,7 +34,7 @@ dispatch_queue_t mainQueue = dispatch_get_main_queue();
 ```
 主队类，程序运行起来就会创建一个主线程，线程里面对应有唯一一个主队列，这个队列是串行队列。
 
-### GCD主队列
+### GCD全局队列
 ```objectivec
 dispatch_queue_t globalQueue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT,0);
 //队列的优先级
@@ -84,6 +84,7 @@ dispatch_async(queue, ^{
 | ------ | ------ | ------ | ------ |
 | 同步 | 任务在同一个线程按顺序执行 | 任务在同一个线程按顺序执行 | 任务在同一个线程按顺序执行 |
 | 异步 | 任务在多个线程按顺序开始执行(不是真正的并发) | 任务在不同线程同时执行(真正的并发) | 任务在同一个线程按顺序执行 |
+
 总结不同队列用于执行的任务类型：
 * 主队列（顺序）：其他队列中有任务完成需要更新UI。
 * 并发队列：用来执行与UI无关的后台任务，dispatch barrier同步、dispatch groups、读取网络数据、大量数据的数据库读写等任务
