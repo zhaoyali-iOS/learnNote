@@ -74,3 +74,12 @@ typedef NS_ENUM(NSInteger, DelegateFlags) {
 * 一次性timer执行完之后会释放target，一般不会引起循环引用
 * 重复的timer就会造成循环引用，执行invalidate会释放terget，打破循环引用，但invalidate不一定会执行
 * 解决方法：timer分类用block实现，block中如果使用target要使用weak引用
+
+## performSelector
+performSelector方法在执行时因为无法识别将要执行函数时哪一个，就无法插入内存管理的代码，所以容易出现没存问题。<br/>
+performSelector方法所能处理的方法的局限性大，参数个数类型，返回值都要局限性，不够灵活。<br/>
+所以最好使用GCD。
+
+
+
+
