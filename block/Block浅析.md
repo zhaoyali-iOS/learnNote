@@ -126,7 +126,13 @@ Block外的变量使用`__block`修饰符之后，在Block内外都可以修改�
 
 ## Block类型
 既然Block也是一个结构体对象，那么也就会涉及到内存管理。尤其是在block捕获到对象型变量时，就更加需要内存管理了。Block一共有三种类型
-`__NSStackBlock__`、`__NSMallocBlock__`、`__NSGlobalBlock__`，根据名字知道他们内存分别在栈区、堆区、全局区。
+
+| 类型 | 内存区 | 场景 | 作用域 |
+| --- | --- | --- | --- |
+| __NSStackBlock__ | 栈区，由系统管理 | 默认创建此类型 | 函数结束时  |
+| __NSMallocBlock__ | 堆区，由程序员自己管理 | stack类型拷贝到堆上时 | 引用计数为0时 |
+| __NSGlobalBlock__ | 全局区，由系统管理 | 全局作用域内定义、函数内定义且没有捕获局部变量 | 整个程序周期内 |
+
 ```objectivec
     NSNumber *a = [NSNumber numberWithInt:10];
     //__NSStackBlock__
