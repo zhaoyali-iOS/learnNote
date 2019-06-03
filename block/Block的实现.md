@@ -4,7 +4,11 @@
 * Block怎样捕获的外部变量
 * 为什么使用__block修饰符就可以修改捕获的变量
 * Block捕获对象怎样实现的强引用
-
+## 名词解释
+有必要先说明Block、blcok型变量、__block变量三者的含义不同
+* Block指的是：含有表达式、参数、返回值的语法
+* block型变量/block变量指的是：把bloc语法生成的block赋值给一个变量，这个变量指向的数据类型是block语法类型；实质就是个变量，跟C函数中的其他变量一样，可以作为全局局部静态动态变量，可以作为函数参数和返回值等使用。人们也常习惯把它称之为block
+* __block变量指的是：使用__block修饰符修饰的变量，可以在block内外部修改并保存其值。是一个机构体__Block_byref_xx_xx，含有__isa、__forwarding、变量、__flags、__size成员。
 
 ## Block编译后的代码实现
 我们先来看这个简单改造后的main函数
@@ -359,7 +363,59 @@ void _Block_object_dispose(const void *object, const int flags) {
     }
 }
 ```
-可以简单理解成__main_block_copy_0就相当于retian操作，__main_block_dispose_0就是release操作。当拷贝或者释放Block时都会对他成员变量(捕获的对象)做相应处理(retian或release)，进而使Block捕获对象的引用达到平衡。当Block中有__block修饰的变量时，也会对_Block_byref对象做拷贝和release操作。
+当拷贝Block时，传递的flags是BLOCK_FIELD_IS_BLOCK，就会调用到这个函数，在runtime.h文件中找到实现
+```objectivec
+static void *_Block_copy_internal(const void *arg, const bool wantsOne) {
+    struct Block_layout *aBlock;
+
+    if (!arg) return NULL;
+    
+    
+    // The following would be better done as a switch statement
+    aBlock = (struct Block_layout *)arg;
+    //已经被free
+    if (aBlock->flags & BLOCK_NEEDS_FREE) {
+        // latches on high
+        latching_incr_int(&aBlock->flags);
+        return aBlock;
+    }
+    //已经copy过，就让引用计数+1
+    else if (aBlock->flags & BLOCK_IS_GC) {
+        // GC refcounting is expensive so do most refcounting here.
+        if (wantsOne && ((latching_incr_int(&aBlock->flags) & BLOCK_REFCOUNT_MASK) == 2)) {
+            // Tell collector to hang on this - it will bump the GC refcount version
+            _Block_setHasRefcount(aBlock, true);
+        }
+        return aBlock;
+    }
+    //Globall类型Block，什么都不做
+    else if (aBlock->flags & BLOCK_IS_GLOBAL) {
+        return aBlock;
+    }
+
+    // 从栈拷贝到堆
+    if (!isGC) {
+        struct Block_layout *result = malloc(aBlock->descriptor->size);
+        if (!result) return NULL;
+        memmove(result, aBlock, aBlock->descriptor->size); // bitcopy first
+        // reset refcount
+        result->flags &= ~(BLOCK_REFCOUNT_MASK|BLOCK_DEALLOCATING);    // XXX not needed
+        result->flags |= BLOCK_NEEDS_FREE | 2;  // logical refcount 1
+        result->isa = _NSConcreteMallocBlock;
+        _Block_call_copy_helper(result, aBlock);
+        return result;
+    }
+    else {
+        ...
+    }
+}
+```
+
+可以简单理解成__main_block_copy_0就相当于retian操作，__main_block_dispose_0就是release操作。<br/>
+当拷贝或者释放Block时都会对他成员变量(捕获的对象)做相应处理(retian或release)，进而使Block捕获对象的引用达到平衡。<br/>
+当Block中有__block修饰的变量时，也会对_Block_byref对象做拷贝和release操作。<br/>
+如果Block已经在堆上，就不会再copy，而是引用计数+1；<br/>
+Global类型的Block的copy操作是什么都不做。
 
 ### __block修饰基础变量
 ```objectivec
@@ -453,5 +509,9 @@ int main(int argc, char * argv[]) {
 
 
 ## Block中的循环引用
-了解了无论是Block结构体、__block变量结构体，他们都是对象，都需要进行内存管理。都要避免循环引用。
+了解了无论是Block结构体、__block变量结构体，他们都是对象，都需要进行内存管理。都要避免循环引用。可以使用__block、__weak、__unsafe_unretained都可以打破循环引用
+* __block优点：可以控制对象的持有期间。缺点：block语法引起循环引用，执行block打破循环引用，这样导致block必须执行
+* __weak优点：直接打破循环引用，缺点：可能在执行block时变量已经被置为nil。逻辑不完整
+* __unsafe_unretained优点：直接打破循环引用 缺点：在执行block时变量被释放导致野指针
+    
 
