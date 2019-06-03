@@ -85,6 +85,16 @@ finishBlock blc = ^{ NSLog(@"hi,girl") };
     blk();
 ```
 上面打印结果是hi,girl。这是因为：block语法捕获的是self，而不是self.str,在block里新的变量的值是self的地址，相当于Block持有self，只要self的地址不变，self里面的内容修改是可以同步到Block里面的，同时Block里面修改的内容可以同步到Block外面。
+```objectivec
+    self.testProperty = @"test property";    
+    void (^blk)(void) = ^{
+        //等效于self.testProperty = @"a new value of test property";
+        _testProperty = @"a new value of test property";
+    };
+    blk();
+    NSLog(@"%@",self.testProperty);
+```
+这里打印的结果是“a new value of test property”，block捕获的变量是self而不是_testProperty。所以block也可以修改实例变量的值。
 还有一种特殊情况
 ```objectivec
 char text[] = "hellow";
@@ -106,6 +116,7 @@ char text[] = "hellow";
 * 局部静态变量，Block截获的是局部静态变量的指针，在Block中可以读取和修改。
 * 局部变量（自动变量），Block需要截获，默认只能读取不能修改。
 * Block截获对象型自动变量时，在Block里可以修改对象里面的内容；
+* Block使用对象的实例变量时捕获的时对象而不是对象的实例变量。
 * Block截获数值型变量时，Block中不可以修改变量值，除非使用__block修饰符。
 * Block不支持C数组变量的截获。
 
@@ -113,8 +124,24 @@ char text[] = "hellow";
 ## __block修饰符
 Block外的变量使用`__block`修饰符之后，在Block内外都可以修改变量并互相同步。可以理解成Block内外的变量引用的是同一个变量，不使用`__block`修饰符时Block内外其实是两个变量，只不过两个变量的值相同。
 
-## block内存
-既然Block也是一个结构体对象，那么也就会涉及到内存管理。尤其是在block捕获到对象型变量时，就更加需要内存管理了。
+## Block类型
+既然Block也是一个结构体对象，那么也就会涉及到内存管理。尤其是在block捕获到对象型变量时，就更加需要内存管理了。Block一共有三种类型
+`__NSStackBlock__`、`__NSMallocBlock__`、`__NSGlobalBlock__`，根据名字知道他们内存分别在栈区、堆区、全局区
+```objectivec
+    NSNumber *a = [NSNumber numberWithInt:10];
+    //__NSStackBlock__
+    NSLog(@"%@",^{
+        NSLog(@"hellow:%@",a);
+    });
+    //__NSMallocBlock__
+    void (^blk)(void) = ^{
+        NSLog(@"hellow");
+    };
+    NSLog(@"%@",blk);
+```
+打印结果：第一个是__NSStackBlock__类型，第二个是__NSMallocBlock__类型，这是因为Block定义的内存分配在栈区，进行`=`操作时把栈上的对象copy到了堆上。
+
+
 
 
 
