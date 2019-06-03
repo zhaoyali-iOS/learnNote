@@ -1,5 +1,5 @@
 ###
-[上一篇](Block浅析.md)我们只是简单讲述了Block的使用方法，这边文章我们就具体看看Block的实现和内存管理情况。这遍主要说明的问题
+[上一篇](Block浅析.md)我们只是简单讲述了Block的使用方法，这边文章我们就具体看看Block的实现和内存管理情况。这篇主要说明的问题
 * Block到底是什么类型
 * Block怎样捕获的外部变量
 * 为什么使用__block修饰符就可以修改捕获的变量
@@ -16,7 +16,7 @@ int main(int argc, char * argv[]) {
     blk();
 }
 ```
-编译后文件很长，很多都是跟block无关的，我们先不看，搜索找到main函数，编译后的代码是这样的
+编译后文件很长，很多都是跟Block无关的，我们先不看，搜索找到main函数，编译后的代码是这样的
 ```objectivec
 int main(int argc, char * argv[]) {
 
@@ -35,7 +35,7 @@ int main(int argc, char * argv[]) {
     blk->FuncPtr(blk);
 }
 ```
-这里出现了陌生方法变量，__main_block_impl_0、__main_block_func_0、__main_block_desc_0_DATA、FuncPtr，
+这里出现了陌生方法指针变量：__main_block_impl_0、__main_block_func_0、__main_block_desc_0_DATA、FuncPtr。
 ### __main_block_impl_0
 ```objectivec
 struct __main_block_impl_0 {
@@ -49,7 +49,7 @@ struct __main_block_impl_0 {
   }
 };
 ```
-原来是一个结构体，有2个成员变量，一个构造方法。我们知道Block也是一个结构体对象，这个就是这个结构体的定义。一般命名都是以`文件名`_block_imp_`个数`，就表示main文件的第一个Block结构体。下面在看看他的成员变量
+原来是一个结构体，有2个成员变量，一个构造方法。我们知道Block是一个结构体对象，这个就是Block结构体的定义。一般命名都是以__`文件名`_block_impl_`个数`，表示main文件的第一个Block结构体。下面在看看他的成员变量
 ```objectivec
 struct __block_impl {
   void *isa;//Block的类型，stack，malloc，global这三中类型
@@ -64,29 +64,29 @@ static struct __main_block_desc_0 {
 } __main_block_desc_0_DATA = { 0, sizeof(struct __main_block_impl_0)};
 
 ```
-`__block_impl`:可以理解isa表示Block的类型；这个也说明Block也是一种对象。Flags在这里没有用到，默认为了0；FuncPtr被赋值了一个__main_block_func_0的不透明类型对象。
-`__main_block_desc_0`：记录__main_block_impl_0变量大小的一个结构体。<br/>
-构造函数第一个参数要求是不透明指针，这里传递的是__main_block_func_0，我们来看看他的定义
+`__block_impl`:isa表示Block的类型；这个也说明Block也是一种对象。Flags跟objc_object中的mask一样是标记位，标记是否copy过等信息，默认为了0；FuncPtr表示函数指针，存放Block的匿名函数，最终被赋值__main_block_func_0的地址。
+`__main_block_desc_0`：记录__main_block_impl_0结构体的大小。<br/>
 ```objectivec
 static void __main_block_func_0(struct __main_block_impl_0 *__cself) {
         NSLog((NSString *)&__NSConstantStringImpl__var_folders_r9_ydkfm4694mv65g46y2zqwz2m0000gn_T_main_7b6f1f_mi_0);
 }
 ```
-这里有NSLog这几个，我们编译的OC文件里只有Bloc表达是用到了这个，猜测应该是Block表达式的匿名方法；编译器给这个匿名函数定义了一个名字'__main_block_func_0',所以Block是匿名这相对于程序员说的，编译器自动定义了名字。我们的表达式了就是定义了一个字符串常量，看看编译后的代码
-
+这里有NSLog这个关键字，我们编译的OC文件里只有Bloc表达是用到了这个，所以这里是Block表达式的匿名方法；编译器给这个匿名函数定义了一个名字'__main_block_func_0',所以Block是匿名这相对于程序员说的，编译器自动定义了名字。我们的表达式了就是定义了一个字符串常量，看看编译后的代码
 ```objectivec
 static __NSConstantStringImpl __NSConstantStringImpl__var_folders_r9_ydkfm4694mv65g46y2zqwz2m0000gn_T_main_7b6f1f_mi_0 __attribute__ ((section ("__DATA, __cfstring"))) = {__CFConstantStringClassReference,0x000007c8,"hellow block!",13};
 ```
-定义个一个静态方法，这里看到OC把字符串常量保存在内存的data区，0x000007c8应该是字符串的地址。这个函数还有一个参数，这个参数传递的是block他自己，这与OC方法都有默认参数self一样的道理。<br/>
-然后我们再回过头来Block结构体的构造方法`__main_block_impl_0`,第一个参数是这个匿名函数的函数指针，第二个参数就是结构体需要的内存大小。<br/>
+一个静态方法，这里看到OC把字符串常量保存在内存的data区，0x000007c8应该是字符串的地址。这个函数还有一个参数，这个参数传递的是block他自己，这与OC方法都有默认参数self一样的道理。<br/>
+然后我们再回过头来看Block结构体的构造方法`__main_block_impl_0`,第一个参数是这个匿名函数的函数指针，第二个参数就是结构体需要的内存大小。<br/>
 至此我们明白了block结构体对象的实现：
 * Block实质是以___`文件名`_block_impl_`自定义Block的序号`命名的结构体。
 * 结构体中保存匿名函数的地址，Block的isa指针、实例的内存空间大小
-* block执行就是取到结构体实例中保存的函数地址，根据函数地址执行函数。
+* block执行就是取到结构体实例中保存的函数地址，根据函数地址执行函数。<br/>
+
+这个是实现Block的内存图：![block](image/block.JPG)
 
 
 ## Block捕获变量
-上面我们写的最简单的Block，那复杂点的，捕获变量，表达式有返回值会怎样呢？
+上面我们写的最简单的Block，那复杂点的：会捕获变量，有返回值会怎样呢？
 ```objectivec
     int a = 8;
     int (^blk)(void) = ^{
@@ -96,7 +96,7 @@ static __NSConstantStringImpl __NSConstantStringImpl__var_folders_r9_ydkfm4694mv
     a = 10;
     blk();
 ```
-这里我们让block有捕获变量，修改变量后在执行；同样先看看编译后的代码
+还是先看看编译后的代码
 ```objectivec
     int a = 8;
     int (*blk)(void) = ((int (*)())&__main_block_impl_0((void *)__main_block_func_0, &__main_block_desc_0_DATA, a));
@@ -105,7 +105,7 @@ static __NSConstantStringImpl __NSConstantStringImpl__var_folders_r9_ydkfm4694mv
 ```
 与上一次相比，在构造block实例时多了一个参数a，我们再来看看定义Block的结构体有什么变化
 ```objectivec
-  struct __main_block_impl_0 {
+struct __main_block_impl_0 {
   struct __block_impl impl;
   struct __main_block_desc_0* Desc;
   int a;
@@ -126,9 +126,9 @@ static __NSConstantStringImpl __NSConstantStringImpl__var_folders_r9_ydkfm4694mv
         return a+10;
     }
 ``` 
-很明显，这里是通过cself指针取出捕获的变量，然后使用实现block的逻辑。至此我们知道了Block就是通过拷贝block外部的变量实现捕获动作的。block内外变量实际是两个变量，当然外面修改了不会自动同步给block里面，所以这里程序执行的结果也必定是18，不是20；
+很明显，这里是通过cself指针取出捕获的变量，然后使用实现block的逻辑。至此我们知道了Block就是通过拷贝Block外部的变量实现捕获动作的。block内外变量实际是两个变量，当然外面修改了不会自动同步给block里面，所以这里程序执行的结果也必定是18，不是20；
 
-## 捕获不同种类的变量
+## 捕获不同类型的变量
 上面大致了解了block捕获外部变量的方式，变量有不同的种类，他们是捕获方式是否一致呢？
 ```objectivec
 //全局变量
@@ -168,8 +168,8 @@ struct __main_block_impl_0 {
 ```
 Block不用捕获全局变量、全局静态变量；<br/>
 静态局部变量是指针传递，所以不加__block也可以修改内容并同步；<br/>
-局部数值型变量是通过传值方式捕获(copy一份)，不能修改其值，局部对象指针通过强引用关系捕获；<br/>
-局部对象型变量是通过强引用来持有对象。这里也就解释了上一篇中可以修改对象的属性的原因。这个是大致的Block时间内存图：![block](image/block.JPG)
+局部数值型变量是通过传值方式捕获(copy一份)，不能修改其值；<br/>
+局部对象型变量是通过强引用来持有对象。这里也就解释了上一篇中可以修改对象的属性的原因。
 
 ## __block变量的实现
 ```objectivec
@@ -182,7 +182,7 @@ Block不用捕获全局变量、全局静态变量；<br/>
     blk();
     NSLog(@"%d",a);
 ```
-让block捕获带__block修饰符的变量，编译后的代码
+Block捕获带__block修饰符的变量，编译后的代码
 ```objectivec
 struct __main_block_impl_0 {
   struct __block_impl impl;
@@ -196,10 +196,10 @@ struct __main_block_impl_0 {
   }
 };
 
-//创建a变量的地方也发生变化
+//__block int a = 8 编译出的代码
 __attribute__((__blocks__(byref))) __Block_byref_a_0 a = {(void*)0,(__Block_byref_a_0 *)&a, 0, sizeof(__Block_byref_a_0), 8};
 ```
-可以看到`__block int a = 8;`编译后不在是简单的定义一个int类型的变量，而是定义了一个__Block_byref_a_0类型的变量，block结构体定义中的存放捕获变量的成员变量是`__Block_byref_a_0 *a`。
+可以看到`__block int a = 8;`编译后不在是简单的定义一个int类型的变量，而是定义了一个__Block_byref_a_0类型的变量，Block结构体中多了成员变量是`__Block_byref_a_0 *a`，用于存放捕获__block变量。
 ```objectivec
 struct __Block_byref_a_0 {
   void *__isa;//变量的类型，这里是int
@@ -209,9 +209,9 @@ __Block_byref_a_0 *__forwarding;//自己类型相同的一个指针
  int a;//存储的值
 };
 ```
-这也是一个结构体，有一个__forwarding指针，__forwarding指向和自己相同类型的对象。这个结构体的构造方式传递了这些成员的值。`int a`是真正保存变量的地方。__forwarding指针传递的值是&a，这个指针指向了自己本身，最后一个参数8才是要存储的值。而在block结构体的构造函数的初始化列表`a(_a->__forwarding)`,把block里面的__Block_byref_a_0指针指向了外面的__Block_byref_a_0，即block内外的变量指向了同一个变量。__block变量的内存结构如图：
+这也是一个结构体，有一个__forwarding指针，__forwarding指向和自己相同类型的对象。这个结构体的构造方法就是给这些成员赋值。`int a`是真正保存变量的地方。__forwarding指针传递的值是&a，这个指针指向了自己，最后一个参数8才是要存储的值。而在Block结构体的构造函数的初始化列表`a(_a->__forwarding)`,把Block里面的__Block_byref_a_0指针指向了外面的__Block_byref_a_0，即Block内外的变量指向了同一个变量。__block变量的内存结构如图：
 ![block_forwarding_int](image/block_forwarding_int.JPG)
-我们在看看匿名函数中是怎样使用这个变量的
+我们再看看匿名函数中是怎样使用这个变量的
 ```objectivec
 //Block内部修改__block变量
 static void __main_block_func_0(struct __main_block_impl_0 *__cself) {
@@ -250,11 +250,11 @@ __Block_byref_obj_0 *__forwarding;
 ![block_forwarding_object](image/block_forwarding_object.JPG)
 
 ## Block的内存管理
-前面我们知道了Block的三种类型，在__block变量里会强引用对象，捕获的对象变量时也会强引用对象，很明显block也要涉及内存管理。一般stack和global类型的Block都是系统自己管理，malloc类型需要我们自己管理。
+前面我们知道了Block的三种类型，在__block变量里会强引用对象，捕获对象变量时也会强引用对象，很明显block也要涉及内存管理。stack和global类型的Block都是系统自己管理，malloc类型需要我们自己管理。
 ### stack类型copy到堆上
-前面我们知道Block作为函数参数时不会自动copy，其他情况一般都会自动copy或加入到自动释放池。当捕获基础变量或者不捕获变量时其实就是拷贝__xxx_block_imp_x结构体对象。
-### 捕获到对象变量
-当Block表达式捕获到对象时情况就会复杂些
+前面我们知道Block作为函数参数时不会自动copy，其他情况一般都会自动copy或加入到自动释放池。当捕获基础变量或者不捕获变量时拷贝就是简单的__xxx_block_imp_x结构体对象的拷贝。
+### 捕获对象变量
+当Block表达式捕获到对象时情况有些复杂
 ```objectivec
 struct __main_block_impl_0 {
   .....
@@ -359,7 +359,7 @@ void _Block_object_dispose(const void *object, const int flags) {
     }
 }
 ```
-可以简单理解成__main_block_copy_0就相当于retian操作，__main_block_dispose_0就是release操作。当拷贝Block时对他成员变量(捕获的对象)是retian操作，当release时对Block持有的成员变量(捕获的对象)是release操作，这样这个Block外部对象的引用计数才会平衡。当Block中有__block修饰的变量时，也会对_Block_byref对象做拷贝和release操作。
+可以简单理解成__main_block_copy_0就相当于retian操作，__main_block_dispose_0就是release操作。当拷贝或者释放Block时都会对他成员变量(捕获的对象)做相应处理(retian或release)，进而使Block捕获对象的引用达到平衡。当Block中有__block修饰的变量时，也会对_Block_byref对象做拷贝和release操作。
 
 ### __block修饰基础变量
 ```objectivec
@@ -373,8 +373,6 @@ void _Block_object_dispose(const void *object, const int flags) {
     NSLog(@"%d",a);
 ```
 这里的blk是malloc类型(等号就是拷贝)，也有__main_block_copy_0和__main_block_dispose_0操作。在copy方法flags是BLOCK_FIELD_IS_BYREF，所以会调用到`_Block_byref_assign_copy`方法
-
-
 ```objectivec
 static void _Block_byref_assign_copy(void *dest, const void *arg, const int flags) {
     struct Block_byref **destp = (struct Block_byref **)dest;
@@ -402,9 +400,9 @@ static void _Block_byref_assign_copy(void *dest, const void *arg, const int flag
     _Block_assign(src->forwarding, (void **)destp);
 }
 ```
-这里我们看到Block拷贝的工作1.拷贝Block结构体 2.拷贝__Block_byref_a_0结构体拷贝到堆上,堆上的forwarding指向自己，栈上的forwarding指向堆上的结构体对象；这个是完成拷贝之后的内存结构图：
+这里我们看到Block拷贝所做的事情：1.拷贝Block结构体 2.拷贝__Block_byref_a_0结构体到堆上,堆上的forwarding指向自己，栈上的forwarding指向堆上的结构体对象；这个是完成拷贝之后的内存结构图：
 ![block_forwarding_copy_int](image/block_forwarding_copy_int.JPG)
-这样就可以保证无论是栈上的__block变量还是堆上的__block变量，最终修改的都是同一块地址；同时也就解释了__forwording指针存在的原因了。无论是否copy都能保证修改的是修改的保存和同步。
+这样就可以保证无论是栈上的__block变量还是堆上的__block变量，最终修改的都是同一块地址；同时也就解释了__forwording指针存在的原因了。无论是否copy都能保证修改的保存和同步。
 
 ### __block修饰对象
 ```objectivec
@@ -417,7 +415,6 @@ static void _Block_byref_assign_copy(void *dest, const void *arg, const int flag
     blk();
 ```
 这样的代码编译后是
-
 ```objectivec
 static void __Block_byref_id_object_copy_131(void *dst, void *src) {
  _Block_object_assign((char*)dst + 40, *(void * *) ((char*)src + 40), 131);
@@ -449,7 +446,7 @@ int main(int argc, char * argv[]) {
     ...
 }
 ```
-可以看到__Block_byref_obj_0结构体中多了两个成员变量：retian的函数地址，release的函数地址；初始化的时候传递的参数依次是isa、forwarding、flags、size、copy的函数地址、release的函数地址；copy和dispose是传递的flags都是131，即BLOCK_BYREF_CALLER | BLOCK_FIELD_IS_OBJECT的case。里面就是给对象做了retain操作；copy后的内存图：![block_forwarding_copy_obj](image/block_forwarding_copy_obj.JPG)
+可以看到__Block_byref_obj_0结构体中多了两个成员变量：retian的函数地址，release的函数地址；初始化的时候传递的参数依次是isa、forwarding、flags、size、copy的函数地址、release的函数地址；copy和dispose时传递的flags都是131，即BLOCK_BYREF_CALLER | BLOCK_FIELD_IS_OBJECT的case。里面就是给对象做了retain/release操作；copy后的内存图：![block_forwarding_copy_obj](image/block_forwarding_copy_obj.JPG)
 
 
 
