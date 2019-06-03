@@ -126,7 +126,7 @@ Block外的变量使用`__block`修饰符之后，在Block内外都可以修改�
 
 ## Block类型
 既然Block也是一个结构体对象，那么也就会涉及到内存管理。尤其是在block捕获到对象型变量时，就更加需要内存管理了。Block一共有三种类型
-`__NSStackBlock__`、`__NSMallocBlock__`、`__NSGlobalBlock__`，根据名字知道他们内存分别在栈区、堆区、全局区
+`__NSStackBlock__`、`__NSMallocBlock__`、`__NSGlobalBlock__`，根据名字知道他们内存分别在栈区、堆区、全局区。
 ```objectivec
     NSNumber *a = [NSNumber numberWithInt:10];
     //__NSStackBlock__
@@ -139,7 +139,62 @@ Block外的变量使用`__block`修饰符之后，在Block内外都可以修改�
     };
     NSLog(@"%@",blk);
 ```
-打印结果：第一个是__NSStackBlock__类型，第二个是__NSMallocBlock__类型，这是因为Block定义的内存分配在栈区，进行`=`操作时把栈上的对象copy到了堆上。
+这段代码是打印不同类型Block：第一个是__NSStackBlock__类型，第二个是__NSMallocBlock__类型，这是因为Block的内存分配在栈区，进行`=`操作时把栈上的对象copy到了堆上。也就是说Block类型的`=`操作都是copy。
+ ```objectivec
+    //__NSGlobalBlock__
+    NSLog(@"%@",^{
+        NSLog(@"hellow");
+    });
+    //__NSGlobalBlock__
+    void (^blk2)(void) = ^{
+        NSLog(@"hellow");
+    };
+    NSLog(@"%@",blk2);
+    //__NSGlobalBlock__,dyAall是一个全局变量
+    NSLog(@"%@",^{
+        NSLog(@"hellow，%d",dyAall);
+    });
+ ```
+ 这里打印出来的都是__NSGlobalBlock__类型。这里先说全局类型的Block是指在全局语义内定义或者表达式没有捕获任何自动变量的块。全局Block的等号copy是一个空操作。这也算是对Block的一种优化，避免多余copy。也是为什么会有__NSGlobalBlock__类型的原因。
+```objectivec
+- ( void(^)(void) )getBlok {
+    int a = 10;
+    return ^{
+        NSLog(@"girl:%d",a);
+    };
+}
+
+NSLog(@"%@",[self getBlok]);
+```
+当Block作为函数返回值时是__NSMallocBlock__类型，这里是因为，返回值在函数结束时其作用域也就结束，理论上应该释放的，这样的话这个方法就会永远返回nil，跟ARC一样要延长Block的声明周期，所以XCode也把Block先copy到堆上，然后放到自动释放池中，相当于这样：
+```objectivec
+- ( void(^)(void) )getBlok {
+    int a = 10;
+    void(^blk)(void) = ^{
+        NSLog(@"girl:%d",a);
+    };
+    blk = [ [blk copy] autorelease];
+    return blk;
+}
+```
+block作为函数参数时不会copyBlock，block的类型不变，引用计数不会+1或-1
+```objectivec
+- (void)testBlock:( void(^)(void) ) blk {
+    NSLog(@"%@",blk);
+}
+
+    //__NSStackBlock__，因为函数参数不会自动copy
+    [self testBlock:^{
+        NSLog(@"testBlock:%@",a);
+    }];
+```
+小结：
+* `__NSStackBlock__`:Block最开始分类的类型，存储在栈上，超出作用域就会释放。
+* `__NSMallocBlock__`：分配在堆上，一般是stack类型copy过去的。
+* `__NSGlobalBlock__`：表达式中没有捕获任何自动变量，或者只有全局变量、静态变量，或者没有然后变量的块。他的copy是空操作。
+* `=`：把stack类型Blockcopy到堆上，把Malloc类型Block的引用计数+1；
+* Block作为函数返回值时会自动copy到堆上，并自动添加到autoreleasePool中；Block作为函数参数类型不变，引用计数也不变。
+* Block中捕获对象型自动变量是会使捕获的变量引用计数+1，当Block释放时也会使捕获的变量引用计数-1。
 
 
 
