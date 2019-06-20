@@ -87,7 +87,7 @@ struct method_t {
 ```
 `flags` 是一个32字节的数值，用于各种标记位，如是否是meta、是否是root类、是否已经loaded、是否正在initializing，是否已经initialized等<br/>
 `class_ro_t`存储编译时期确定的方法、属性、协议<br/>
-`method_array_t` 存储运行时加载的所有方法，主类和分类都有，分类方法在前，消息传递中在这个数组中找到相同方法名就结束，不会继续往后找，所以分类会覆盖主类的方法<br/>
+`method_array_t` 存储运行时加载的所有方法，主类和分类都有，`分类方法在前`，消息传递中在这个数组中找到相同方法名就结束，不会继续往后找，所以分类会覆盖主类的方法<br/>
 
 ```objectivec
 struct cache_t {
