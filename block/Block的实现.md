@@ -197,6 +197,7 @@ struct __main_block_impl_0 {
 * 局部数值型变量是通过传值方式捕获(copy一份:int a;)，Block内外修改内容后不能同步；
 * 局部对象型变量是通过强引用来持有对象(NSObject *__strong obj )。这里也就解释了Block内可以修改对象属性的原因。
 * 局部对象型变量是通过弱引用对象(__weak id wealObj = obj;)。
+<br/>
 Block捕获的对象不可以修改，实质是捕获变量指针所指向的内存空间不可修改。这个是通过编译器检查来控制的，而不是使用const声明，这就是把问题在编译阶段就避免，而不是运行后执行时暴露。
 
 ## __block修饰符的实现
@@ -277,10 +278,10 @@ __Block_byref_obj_0 *__forwarding;
 同样也是有__forwarding指针，由于__block修饰的是对象，所以这里多了NSObject的内存分配，定义好之后的内存结构如图：
 ![block_forwarding_object](image/block_forwarding_object.JPG)
 小结：
-使用__block修饰变量时，实质是创建了一个结构体__Block_Byref_xxx，在结构体中保存变量；Block中捕获这个__Block_Byref结构体，这样Block内外的变量指针都指向__Block_Byref_xxx结构体，修改时实质是修改了__Block_Byref_xxx结构体的成员变量而不是这个结构体本身。这也就实现了Block内外修改会同步的问题。
+使用__block修饰变量时，实质是创建了一个结构体__Block_Byref_xxx，在结构体中保存变量；Block内部捕获__Block_Byref结构体，这样Block内外的变量指针都指向__Block_Byref_xxx结构体，修改变量的实质是修改了__Block_Byref_xxx结构体的成员变量(不修改结构体本身)。这也就实现了Block内外修改会同步的功能。
 
 ## Block的内存管理
-通过查看编译后的代码，我们知道Block本身是结构体类型，他们的内存管理方式也不同；global类型Block没有捕获变量使用到的内存都是在静态区，这里的内存是由系统管理；stack类型Block内存在栈区，这里也是有系统管理；malloc类型Block内存在堆区，需要我们自己管理。
+通过查看编译后的代码，我们知道Block本身是结构体类型，他们的内存管理方式也不同；global类型Block的内存在静态区；stack类型Block内存在栈区；malloc类型Block内存在堆区；栈和静态区内存由系统自动化管理，堆区内存需要我们自己管理。
 ### stack类型copy到堆上时机
 mallock类型的Block都是由stack类型copy到堆上形成的。下面是总结的copy时机：
 * 调用Block的copy函数，eg：`=`
@@ -288,12 +289,12 @@ mallock类型的Block都是由stack类型copy到堆上形成的。下面是总�
 * Block赋值给__strong修饰的id指针或__strong修饰的类成员变量
 * Cocoa 框架里usingBlock的方法和GCD中传递Block的API
 
-OC中把Block也看作是对象，所以对应也会有retian和release操作，
-copy的实现：执行`_Block_copy_internal`方法，如果实现了`xxx_block_copy_xxx`就执行<br/>
-release的实现：如果实现了`xxx_block_dispose_xxx`就执行，执行`_Block_release`方法<br/>
-实现`xxx_block_copy_xxx`和`xxx_block_dispose_xxx`的时机：Block表达式内部捕获了外部引用型变量，eg：NSOBject，Block, __block、__weak、__strong修饰的变量
+既然OC中把Block也看作是对象，就应该有retian和release操作，
+retain(copy)的实现：执行`_Block_copy_internal`方法(对Block对象的retain)，如果实现了`xxx_block_copy_xxx`就执行(Block类的成员变量的内存管理)<br/>
+release的实现：如果实现了`xxx_block_dispose_xxx`就执行(Block类的成员变量的内存管理)，执行`_Block_release`方法(对Block对象的release)<br/>
+实现`xxx_block_copy_xxx`和`xxx_block_dispose_xxx`的时机：Block表达式内部捕获了外部引用型变量，eg：id、NSOBject，Block, __block、__weak、__strong修饰的变量
 
-### Block本身的copy源码
+### Block本身的copy
 ```objectivec
 //Block本身的copy方法
 static void *_Block_copy_internal(const void *arg, const bool wantsOne) {
@@ -499,18 +500,13 @@ void _Block_object_dispose(const void *object, const int flags) {
 
 
 ## forwarding存在的意义
-当使用__block修饰的变量被Block捕获时，会相应产生`_Block_byref`结构体以及其成员变量的copy操作。且只当__block修饰的是引用型对象时才会有`_Block_byref`结构体成员变量的copy和release操作
-```objectivvec
-
-```
-
+当使用__block修饰的变量被Block捕获时，会相应产生`_Block_byref`结构体以及其成员变量的copy操作。且只当__block修饰的是引用型对象时才会有`_Block_byref`结构体成员变量的copy和release操作。Block的其成员变量Block_Byref的retian和release操作是：
 ```objectivec
 static void __main_block_copy_0(struct __main_block_impl_0*dst, struct __main_block_impl_0*src) {_Block_object_assign((void*)&dst->obj, (void*)src->obj, 8/*BLOCK_FIELD_IS_BYREF*/);}
 
 static void __main_block_dispose_0(struct __main_block_impl_0*src) {_Block_object_dispose((void*)src->obj, 8/*BLOCK_FIELD_IS_BYREF*/);}
-
 ```
-这里的blk是malloc类型(等号就是拷贝)，也有__main_block_copy_0和__main_block_dispose_0操作。在copy方法flags是BLOCK_FIELD_IS_BYREF，所以会调用到`_Block_byref_assign_copy`方法
+Block的copy方法调用`_Block_object_assign`方法，当传递的类型是BLOCK_FIELD_IS_BYREF时会调用到`_Block_byref_assign_copy`方法，这个方法是对__block变量的copy操作：
 ```objectivec
 static void _Block_byref_assign_copy(void *dest, const void *arg, const int flags) {
     struct Block_byref **destp = (struct Block_byref **)dest;
@@ -564,6 +560,18 @@ static void _Block_byref_assign_copy(void *dest, const void *arg, const int flag
     // assign byref data block pointer into new Block
     _Block_assign(src->forwarding, (void **)destp);
 }
+```
+__block变量的结构体如下：
+```objectivec
+struct __Block_byref_obj_0 {
+  void *__isa;
+__Block_byref_obj_0 *__forwarding;
+ int __flags;
+ int __size;
+ void (*__Block_byref_id_object_copy)(void*, void*);//成员变量obj的copy方法
+ void (*__Block_byref_id_object_dispose)(void*);//成员变量obj的release方法
+ NSObject *__strong obj;
+};
 
 static void __Block_byref_id_object_copy_131(void *dst, void *src) {
  _Block_object_assign((char*)dst + 40, *(void * *) ((char*)src + 40), 131);//131就是上面枚举的BLOCK_BYREF_CALLER+BLOCK_FIELD_IS_OBJECT
@@ -572,56 +580,27 @@ static void __Block_byref_id_object_dispose_131(void *src) {
  _Block_object_dispose(*(void * *) ((char*)src + 40), 131);//131就是上面枚举的BLOCK_BYREF_CALLER+BLOCK_FIELD_IS_OBJECT
 }
 ```
-这里我们看到Block拷贝所做的事情：1.拷贝Block结构体 2.拷贝__Block_byref_a_0结构体到堆上,堆上的forwarding指向自己，栈上的forwarding指向堆上的结构体对象；这个是完成拷贝之后的内存结构图：
-![block_forwarding_copy_int](image/block_forwarding_copy_int.JPG)
-这样就可以保证无论是栈上的__block变量还是堆上的__block变量，最终修改的都是同一块地址；同时也就解释了__forwording指针存在的原因了。无论是否copy都能保证修改的保存和同步。
+可以看到当拷贝__block变量时也伴随着Block_byref成员变量的copy。至此我们知道了，捕获__block变量的Block拷贝过程：
+* 1.拷贝Block结构体本身 
+* 2.拷贝__Block_byref_obj_0结构体到堆上,堆上的forwarding指向自己，栈上的forwarding指向堆上的结构体对象； 
+* 3.Block_byref的成员变量的内存操作(__Block_byref_id_object_copy_131)。
+<br/>
+这个是完成拷贝之后的内存结构图：
+![block_forwarding_copy_obj](image/block_forwarding_copy_obj.JPG)
 
-### __block修饰对象
+当__block修饰的是值类型变量时__Block_byref的结构体：
 ```objectivec
-    __block NSObject *obj = [NSObject new];
-    void (^blk)(void) = ^{
-        obj = [NSObject new];
-        NSLog(@"%@",obj);
-    };
-    NSLog(@"%@",obj);
-    blk();
-```
-这样的代码编译后是
-```objectivec
-static void __Block_byref_id_object_copy_131(void *dst, void *src) {
- _Block_object_assign((char*)dst + 40, *(void * *) ((char*)src + 40), 131);
-}
-static void __Block_byref_id_object_dispose_131(void *src) {
- _Block_object_dispose(*(void * *) ((char*)src + 40), 131);
-}
-
-struct __Block_byref_obj_0 {
+struct __Block_byref_a_0 {
   void *__isa;
 __Block_byref_obj_0 *__forwarding;
  int __flags;
  int __size;
- void (*__Block_byref_id_object_copy)(void*, void*);
- void (*__Block_byref_id_object_dispose)(void*);
- NSObject *__strong obj;
+ int a;
 };
-
-int main(int argc, char * argv[]) {
-    //初始化__block变量
-    __attribute__((__blocks__(byref))) __Block_byref_obj_0 obj = {(void*)0,(__Block_byref_obj_0 *)&obj, 33554432, sizeof(__Block_byref_obj_0), __Block_byref_id_object_copy_131, __Block_byref_id_object_dispose_131, ((NSObject *(*)(id, SEL))(void *)objc_msgSend)((id)objc_getClass("NSObject"), sel_registerName("new"))};
-    //简化后的代码
-    /*
-    NSObject * obj = objc_msgSend((id)objc_getClass("NSObject"), sel_registerName("new"));
-    size_t size = sizeof(__Block_byref_obj_0);
-    __Block_byref_obj_0 obj = {0,&obj, 33554432, size, __Block_byref_id_object_copy_131, __Block_byref_id_object_dispose_131, obj};
-    */
-    
-    ...
-}
 ```
-可以看到__Block_byref_obj_0结构体中多了两个成员变量：retian的函数地址，release的函数地址；初始化的时候传递的参数依次是isa、forwarding、flags、size、copy的函数地址、release的函数地址；copy和dispose时传递的flags都是131，即BLOCK_BYREF_CALLER | BLOCK_FIELD_IS_OBJECT的case。里面就是给对象做了retain/release操作；copy后的内存图：![block_forwarding_copy_obj](image/block_forwarding_copy_obj.JPG)
+可以看到__Block_byref_a_0结构体中没有成员变量的copy和dispose方法，因为修饰的是int值类型。这个时候__block变量的copy就是简单的__Block_byref结构体本身的copy。这个是copy后的内存图：![block_forwarding_copy_int](image/block_forwarding_copy_int.JPG)
 
-
-
+这样就可以保证无论是栈上的__block变量还是堆上的__block变量，最终修改的都是同一块地址；同时也就解释了__forwording指针存在的原因了。Block_byref结构体保证Block内外修改的同步，forwording保证从栈拷贝到堆上时Block内外变量修改的同步。
 
 
 ## Block中的循环引用
