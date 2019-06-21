@@ -604,7 +604,7 @@ __Block_byref_obj_0 *__forwarding;
 
 
 ## Block中的循环引用
-了解了无论是Block结构体、__block变量结构体，他们都是对象，都需要进行内存管理。都要避免循环引用。可以使用__block、__weak、__unsafe_unretained都可以打破循环引用
+了解了无论是Block结构体、__block变量结构体，他们都是对象，都需要进行内存管理。都要避免循环引用。可以使用__block(在Block中使用完变量后再release)、__weak、__unsafe_unretained都可以打破循环引用
 * __block优点：可以控制对象的持有期间。缺点：block语法引起循环引用，执行block打破循环引用，这样导致block必须执行
 * __weak优点：直接打破循环引用，缺点：可能在执行block时变量已经被置为nil。逻辑不完整
 * __unsafe_unretained优点：直接打破循环引用 缺点：在执行block时变量被释放导致野指针
