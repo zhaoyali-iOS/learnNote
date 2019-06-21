@@ -498,6 +498,8 @@ void _Block_object_dispose(const void *object, const int flags) {
 * Block的copy，对于stack类型来说是深拷贝；对于malloc类型来说是浅拷贝(避免不必要的内存浪费),引用计数+1；对gloal类型是空操作
 * 当捕获的成员变量使用__block、__weak、__strong修饰或者类型是NSObject、id、Block时都对其进行内存引用管理
 
+通过对Block的copy和dispose分析我们知道了，Block的copy可能是深拷贝也可能是retian，结合Block的初始创建是在栈上，所以对Block类型的属性都使用copy，而不是strong。
+
 
 ## forwarding存在的意义
 当使用__block修饰的变量被Block捕获时，会相应产生`_Block_byref`结构体以及其成员变量的copy操作。且只当__block修饰的是引用型对象时才会有`_Block_byref`结构体成员变量的copy和release操作。Block的其成员变量Block_Byref的retian和release操作是：
