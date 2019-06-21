@@ -275,6 +275,8 @@ __Block_byref_obj_0 *__forwarding;
 ```
 同样也是有__forwarding指针，由于__block修饰的是对象，所以这里多了NSObject的内存分配，定义好之后的内存结构如图：
 ![block_forwarding_object](image/block_forwarding_object.JPG)
+小结：
+使用__block修饰变量时，实质是创建了一个结构体__Block_Byref_xxx，在结构体中保存变量；Block中捕获这个__Block_Byref结构体，这样Block内外的变量指针都指向__Block_Byref_xxx结构体，修改时实质是修改了__Block_Byref_xxx结构体的成员变量而不是这个结构体本身。这也就实现了Block内外修改会同步的问题。
 
 ## Block的内存管理
 通过查看编译后的代码，我们知道Block本身是结构体类型，他们的内存管理方式也不同；global类型Block没有捕获变量使用到的内存都是在静态区，这里的内存是由系统管理；stack类型Block内存在栈区，这里也是有系统管理；malloc类型Block内存在堆区，需要我们自己管理。
