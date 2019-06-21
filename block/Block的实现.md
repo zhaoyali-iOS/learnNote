@@ -584,9 +584,9 @@ static void __Block_byref_id_object_dispose_131(void *src) {
 * 1.拷贝Block结构体本身 
 * 2.拷贝__Block_byref_obj_0结构体到堆上,堆上的forwarding指向自己，栈上的forwarding指向堆上的结构体对象； 
 * 3.Block_byref的成员变量的内存操作(__Block_byref_id_object_copy_131)。
-<br/>
-这个是完成拷贝之后的内存结构图：
-![block_forwarding_copy_obj](image/block_forwarding_copy_obj.JPG)
+
+
+这个是完成拷贝之后的内存结构图：![block_forwarding_copy_obj](image/block_forwarding_copy_obj.JPG)
 
 当__block修饰的是值类型变量时__Block_byref的结构体：
 ```objectivec
