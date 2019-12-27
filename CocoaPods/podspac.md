@@ -100,3 +100,24 @@ xib文件一般对应的controller或者view目录下。 <br/>
     }
 ```
 
+## pattern **
+在编辑podspace文件是总会用到模糊匹配，对于 `**`的官方解释是
+```
+Pattern: **
+Matches directories recursively.//递归的匹配目录
+```
+在实践中仍然会遇到坑。
+```
+- ERROR | [iOS] public_header_files: The pattern includes header files that are not listed in source_files
+```
+这个错误原因是，在`public_header_files`中指定的目录结构层级太深，需要修改文件的目录结构。
+对于`**`的匹配总结
+> 1. `public_header_files`，`resource_bundles`中的**不支持多级目录匹配
+> 2. `source_files`,中的**支持多级目录的匹配
+> 3. 推荐尽量使用简单的目录层级，不要太深
+
+
+
+
+
+
