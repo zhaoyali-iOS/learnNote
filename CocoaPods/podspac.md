@@ -83,6 +83,7 @@ xib文件一般对应的controller或者view目录下。 <br/>
 ![](images/ClassXib.png)
 解决方法一：通过文件存放目录位置来解决，把xib文件都统一放在Assets中 <br/>
 ![](images/AssetXib.png)
+<br/>
 解决方法二：修改podspac文件，在`source_file`和`resource_bundles`中现在文件类型，xib文件的目录位置不变。
 ```
    s.source_files = [
