@@ -19,10 +19,17 @@ s.resource_bundles = {
     'bundleName' => [MoudleName/Assets/*.xcassets,MoudleName/Classes/**/*.xib]
 }
 ```
-如果pod库以动态库（framework）形式，资源被加载到子库framework的根目录下的MoudleName.bundle里。这样资源文件被分层次的存放，很大程度上减少了命名冲突的问题。<br/>
-通过pod库以静态库（.a）形式，资源被加载到主target的bundle中，与方式一resources的结果一样。<br/>
+如果pod库以动态库（framework）形式，资源被加载到子库framework的根目录下的MoudleName.bundle里。
+* mainBundle的路径:/var/containers/Bundle/Application/E29A0452-3F0C-4774-A34F-B98A5C48A695/AppName.app  
+* framework的路径：/var/containers/Bundle/Application/E29A0452-3F0C-4774-A34F-B98A5C48A695/Agent.app/Frameworks/PodName.framework ，即mainBundle/Frameworks/PodName.framework  
+* pod库中bundle的路径：/var/containers/Bundle/Application/E29A0452-3F0C-4774-A34F-B98A5C48A695/Agent.app/Frameworks/PodName.framework/BundleName.bundle ，即mainBundle/Frameworks/PodName.frameworkBundleName.bundle 
+<br/>
+可以看到使用方式二`resource_bundles`，把资源文件分层级管理起来，而不是都在同一个根目录下，大大减少了命名冲突的可能。<br/>
+如果pod库以静态库（.a）形式，资源被加载到主target的bundle中，与方式一resources的结果一样。<br/>
 用 `resources` 属性指定的资源直接被拷贝到 client target（事实上CocoaPods会先运行脚本对 NIB，Asset Catalog，Core Data Model 等进行编译），这些资源无法享受 Xcode 的优化。这是官方文档的说法，但不清楚所指的优化是哪些（图片压缩？）<br/>
-CocoaPods推荐我们使用resource_bundles的形式。
+CocoaPods推荐我们使用`resource_bundles`的形式。
+
+
 
 ### 访问资源文件
 当使用`resources`形式或者静态库形式，直接在main bundle中访问资源，`+ imageName:(NSString*)name` 方法就是直接访问 `[NSBundle mainBundle]`中的资源。<br/>
