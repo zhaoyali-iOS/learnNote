@@ -29,7 +29,8 @@ s.resource_bundles = {
 用 `resources` 属性指定的资源直接被拷贝到 client target（事实上CocoaPods会先运行脚本对 NIB，Asset Catalog，Core Data Model 等进行编译），这些资源无法享受 Xcode 的优化。这是官方文档的说法，但不清楚所指的优化是哪些（图片压缩？）<br/>
 CocoaPods推荐我们使用`resource_bundles`的形式。
 
-
+### bundle文件命名冲突
+使用`resource_bundles`形式可以使pod库的资源文件分层级打包，避免资源文件的命名冲突问题。但是不同pod库的bundle的命名如果冲突了，也会出现资源加载失败的问题。所以不同的pod库中bundle的命名也不能相互冲突。
 
 ### 访问资源文件
 当使用`resources`形式或者静态库形式，直接在main bundle中访问资源，`+ imageName:(NSString*)name` 方法就是直接访问 `[NSBundle mainBundle]`中的资源。<br/>
