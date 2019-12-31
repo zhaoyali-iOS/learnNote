@@ -27,10 +27,12 @@ s.resource_bundles = {
 <br/>bundle中的内容<br/>
 ![](images/bundle.png) 
 <br/>
-可以看到使用方式二`resource_bundles`，把资源文件分层级管理起来，而不是都在同一个根目录下，大大减少了命名冲突的可能。<br/>
+
+可以看到使用方式二 `resource_bundles` ，把资源文件分层级管理起来，而不是都在同一个根目录下，大大减少了命名冲突的可能。<br/>
 如果pod库以静态库（.a）形式，资源被加载到主target的bundle中，与方式一resources的结果一样。<br/>
 用 `resources` 属性指定的资源直接被拷贝到 client target（事实上CocoaPods会先运行脚本对 NIB，Asset Catalog，Core Data Model 等进行编译），这些资源无法享受 Xcode 的优化。这是官方文档的说法，但不清楚所指的优化是哪些（图片压缩？）<br/>
-CocoaPods推荐我们使用`resource_bundles`的形式。
+CocoaPods推荐我们使用`resource_bundles`的形式。<br/>
+pod中使用 `*.xcassets` 形式组织图片，编译时会把所有的`*.xcassets`图片资源拷贝到Assets.car文件下。所以屋里目录中如果有未使用的xcassets要删除，否则打出的包中会有多余图片。
 
 ### bundle文件命名冲突
 使用`resource_bundles`形式可以使pod库的资源文件分层级打包，避免资源文件的命名冲突问题。但是不同pod库的bundle的命名如果冲突了，也会出现资源加载失败的问题。所以不同的pod库中bundle的命名也不能相互冲突。
