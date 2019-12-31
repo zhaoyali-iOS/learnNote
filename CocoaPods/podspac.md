@@ -23,7 +23,6 @@ s.resource_bundles = {
 * mainBundle的路径:[NSBundle mainBundle] /var/containers/Bundle/Application/E29A0452-3F0C-4774-A34F-B98A5C48A695/AppName.app  
 * framework的路径：[NSBundle bundleForClass:className] /var/containers/Bundle/Application/E29A0452-3F0C-4774-A34F-B98A5C48A695/Agent.app/Frameworks/PodName.framework ，即mainBundle/Frameworks/PodName.framework  
 * pod库中bundle的路径：[frameworkBundle URLForResource:bundleName withExtension:@"bundle"]  /var/containers/Bundle/Application/E29A0452-3F0C-4774-A34F-B98A5C48A695/Agent.app/Frameworks/PodName.framework/BundleName.bundle ，即mainBundle/Frameworks/PodName.frameworkBundleName.bundle 
-<br/>
 ![](images/framework_bundle.png) 
 <br/>bundle中的内容<br/>
 ![](images/bundle.png) 
