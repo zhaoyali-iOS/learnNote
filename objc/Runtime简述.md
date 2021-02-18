@@ -20,6 +20,7 @@ objc_object代表id类型的实例对象
 ```objectivec
 struct objc_object {
      isa_t isa;
+     //一些方法
      ...
 }
 
