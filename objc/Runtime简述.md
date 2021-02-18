@@ -35,15 +35,15 @@ union isa_t {
 #endif 
 }
 
-#   define ISA_BITFIELD                                                      \
-      uintptr_t nonpointer        : 1; //是否使用nonpointer                                      \
-      uintptr_t has_assoc         : 1; //是否有关联对象                                     \
-      uintptr_t has_cxx_dtor      : 1; //是否自定义析构函数                                   \
-      uintptr_t shiftcls          : 33; /*MACH_VM_MAX_ADDRESS 0x1000000000*/，//calss地址 \
-      uintptr_t magic             : 6;                                       \
-      uintptr_t weakly_referenced : 1;  //是否有弱引用指针                                     \
-      uintptr_t deallocating      : 1;  //是否正在析构                                     \
-      uintptr_t has_sidetable_rc  : 1;  //在sideTable上是否有引用计数，如果有retainCount=extra_rc+sidetable+1\
+#   define ISA_BITFIELD                                                      
+      uintptr_t nonpointer        : 1; //是否使用nonpointer                                      
+      uintptr_t has_assoc         : 1; //是否有关联对象                                     
+      uintptr_t has_cxx_dtor      : 1; //是否自定义析构函数                                   
+      uintptr_t shiftcls          : 33; /*MACH_VM_MAX_ADDRESS 0x1000000000*/，//calss地址 
+      uintptr_t magic             : 6;                                       
+      uintptr_t weakly_referenced : 1;  //是否有弱引用指针                                     
+      uintptr_t deallocating      : 1;  //是否正在析构                                     
+      uintptr_t has_sidetable_rc  : 1;  //在sideTable上是否有引用计数，如果有retainCount=extra_rc+sidetable+1
       uintptr_t extra_rc          : 19  //引用计数，当extra_rc占满之后在sidetable上继续标记
 ```
 `isa_t` 是一个[union联合体](https://blog.csdn.net/engerled/article/details/6205584)，也就是说cls、bits、ISA_BITFIELD结构体共用同一块地址空间,不同时间存储不同的变量<br/>
