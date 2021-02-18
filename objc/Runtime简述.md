@@ -87,7 +87,8 @@ struct method_t {
 };
 ```
 `flags` 是一个32字节的数值，用于各种标记位，如是否是meta、是否是root类、是否已经loaded、是否正在initializing，是否已经initialized等<br/>
-`class_ro_t`存储编译时期确定的方法、属性、协议<br/>
+`class_ro_t`只读结构体，编译时期决定，存储类的初始内容，即主类文件里的变量、属性、方法、协议等<br/>
+`class_rw_t`可读可写结构体，运行时期决定，存储类的全部内容，包括主类和分类的内容。它是`class_ro_t`的超集，编译时class结构体的bits指向`class_ro_t`，运行时之后指向`class_rw_t`<br/>
 `method_array_t` 存储运行时加载的所有方法，主类和分类都有，`分类方法在前`，消息传递中在这个数组中找到相同方法名就结束，不会继续往后找，所以分类会覆盖主类的方法<br/>
 
 ```objectivec
