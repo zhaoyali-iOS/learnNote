@@ -71,7 +71,7 @@ struct class_rw_t {
     ...
     uint32_t flags;//各种标记位：meta、initializing、initialized、loaded、root等的标记位
 
-    const class_ro_t *ro;
+    const class_ro_t *ro; //存储编译时确定的属性、方法、协议，即只有主类不包括分类的内容；分类的方法和关联对象存储在class_rw_t中，在运行时生成。
 
     method_array_t methods;//是method_t的数组
     property_array_t properties;
