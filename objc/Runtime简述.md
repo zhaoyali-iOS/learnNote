@@ -142,14 +142,13 @@ typedef struct objc_selector *SEL;
 super的数据结构是这样的：
 ```objectivec
 struct objc_super {
-    /// 消息的接受者，主要用于发生错误是的信息打印
+    /// 消息的接受者，主要用于发生错误时的信息打印等
     __unsafe_unretained _Nonnull id receiver;
-    /// 查找方法的起始类
+    /// 消息调用时，查找消息实现的起始类
     __unsafe_unretained _Nonnull Class super_class;
 };
 
-objc_msgSendSuper(void /* struct objc_super *super, SEL op, ... */ )
-
+id objc_msgSendSuper(struct objc_super *super, SEL op, ...)
 ```
 当OC执行到super关键字时会自动创建objc_super结构体对象，然后调用objc_msgSendSuper，传入这个super结构体对象和方法选择子，以及方法参数<br/>
 方法真正执行会多传入两个参数self和_com,self就是消息的接受者，即super结构体中的reciver,_cmd就是选择子
