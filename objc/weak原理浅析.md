@@ -89,10 +89,10 @@ struct weak_entry_t {
 ```
 `referent`是弱引用指针指向对象的地址;`referrers`和`inline_referrers`是一个联合体,用于存储弱引用的指针，少于REFERRERS_OUT_OF_LINE时用`inline_referrers`存储弱引用指针，否则用`referrers`;通过`out_of_line`方法判断当前联合体是哪个结构<br/>
 
-这里的数据结构就好比现实生活中的公寓：
-全局的SideTables-->sidetable-->weak_table_t-->weak_entry_t（实例和多个弱引用指针）
-    公寓        -->  楼栋   -->     楼层    --> 房间（房间和多个床位）
-实例的地址--->xx小区1号楼606，根据地址找到最小单元weak_wentry_t和房间
+这里的数据结构就好比现实生活中的公寓：<br/>
+全局的SideTables-->sidetable-->weak_table_t-->weak_entry_t（实例和多个弱引用指针）<br/>
+    公寓        -->  楼栋   -->     楼层    --> 房间（房间和多个床位）<br/>
+实例的地址--->xx小区1号楼606，根据地址找到最小单元weak_wentry_t和房间<br/>
 
 ## weak数据结构的增删改
 通过weak的数据结构我们知道，真正存储弱引用关系的是`weak_entry_t`数据。同时在`objc-weak.h`中还定义了修改弱用用关系的方法。
