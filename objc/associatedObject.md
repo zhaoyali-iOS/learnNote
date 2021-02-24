@@ -96,8 +96,8 @@ class ObjcAssociation {
         ...
     };
 ```
-终于看到了庐山真面目了，`ObjcAssociation`用于存储关联对象以及它的引用方式
-
+终于看到了庐山真面目了，`ObjcAssociation`用于存储关联对象以及它的引用方式<br/>
+总之：关联对象使用一个全局静态二级的map存储关联关系，第一级以`关联对象`的地址为key，第二级以关联名称为key，最终存储的是`被关联对象`和引用关系。
 
 ## 开放的接口
 ```objectivec
@@ -157,7 +157,7 @@ static id acquireValue(id value, uintptr_t policy) {
 }
 
 ```
-在添加关联对象时会用到`acquireValue`,可以看到对retain和copy做了相应的内存管理
+在添加关联对象时会用到`acquireValue`,可以看到对retain和copy做了相应的内存管理<br/>
 ```objectivec
 id _object_get_associative_reference(id object, void *key) {
     ...
@@ -171,8 +171,8 @@ id _object_get_associative_reference(id object, void *key) {
     return value;
 }
 ```
-在获取关联对象时会调用到`_object_get_associative_reference`,这里也会做相应的retian或release操作<br/><br/>
-
+在获取关联对象时会调用到`_object_get_associative_reference`,这里也会做相应的retian或release操作<br/>
+可以看`assign`的关联对象，无论set还是get都直接返回的被关联对象地址，不是弱引用指针，所以也不会更新Sidetables，这里要特别注意<br/><br/>
 
 在dealloc中不需要显性的移除关联对象，因为runtime已经帮我们实现了这个功能<br/>
 NSObject中的dealloc方法的调用关系：dealloc->_objc_rootDealloc->objc_object::rootDealloc->object_dispose->objc_destructInstance->_object_remove_assocations
@@ -229,7 +229,7 @@ objc_object::release()
 * 所有的实例间的关联关系都集中交由全局的`AssociationsManager`管理，都集中存储在`AssociationsHashMap`的hashMap中
 * 这个`AssociationsHashMap`以懒加载的方式创建，通过锁实现线程安全
 * 关联对象的内存管理方式中有retain，copy和assign，没有weak
-* 在关联对象销毁时自动释放关联对象，assign的不会置为nil。可以看[这篇文章](ARC.md#dealloc)
+* 在关联对象销毁时自动释放被关联的对象，assign的不会置为nil。可以看[这篇文章](ARC.md#dealloc)
 * 父类和子类定义的关联对相像都存储在同一ObjAssociationMap中。
 
 
