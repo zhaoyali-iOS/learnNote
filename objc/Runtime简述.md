@@ -49,7 +49,8 @@ union isa_t {
 ```
 `isa_t` 是一个[union联合体](https://blog.csdn.net/engerled/article/details/6205584)，也就是说cls、bits、ISA_BITFIELD结构体共用同一块地址空间,不同时间存储不同的变量<br/>
 这里我只贴了在手机64位系统下ISA_BITFIELD结构体的定义。各个含义如代码注释。这里要注意当使用nonPointer时，实例所属的class存储在`shiftcls`位。<br/>
-KVO通过修改isa指针实现的，所以我们在判断实例类型是最好使用`-class`方法，而不通过isa指针。
+KVO通过修改isa指针实现的，所以我们在判断实例类型是最好使用`-class`方法，而不通过isa指针。<br/>
+具体的内存结构可以看[这个笔记](https://github.com/zhaoyali-iOS/learnNote/blob/master/objc/ARC.md#isa%E5%B9%B6%E4%B8%8D%E6%80%BB%E7%9B%B4%E6%8E%A5%E6%8C%87%E5%90%91metaclass%E5%92%8Cclass)
 
 #### objc_class
 ```objectivec
